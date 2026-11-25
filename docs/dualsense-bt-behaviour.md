@@ -87,6 +87,10 @@ for 20 s (11347 reports) and 14 s (7581 reports) in two runs.
 
 | C4 | accept, answer SDP, then **negative** Link Key Request Reply | pad started Secure Simple Pairing 1.6 s later (IO capability NoInputNoOutput, auth requirement 0x04 general bonding, no MITM); board refused (reason 0x18); SSP status 0x05, disconnect reason 0x05; light off quickly; no re-page. Pairing with the BC-250 survived (next press connected normally) |
 
+| L1 | accept, held 14.7 s (6997 HID reports), BC-250 Bluetooth on, then `esp_bt_controller_disable()` (radio off, no LMP detach possible: true link loss) | light off within ~10 s; no page to the BC-250 in 68 s (`bluetoothctl info` polled every 2 s); BlueZ's own connects at +2 s and +20 s: Host is down |
+
+| L2 | accept, held 13.8 s (6655 HID reports), board page scan off, BC-250 Bluetooth on, then `HCI_Disconnect` reason 0x13 (explicit host disconnect) | light off quickly; no page to the BC-250 in 60 s |
+
 So with nothing answering, the pad pages for roughly 15 s after a press and then powers off;
 an unanswered or vanished connection attempt (V2) does not extend that. The bench BC-250 needs
 36 s from the magic packet to answer ping, so a cold boot cannot catch the pad's paging window
@@ -174,6 +178,12 @@ BC-250 normal:                               host_up True
 BC-250 sysctl net.ipv6.icmp.echo_ignore_multicast=1:   host_up False (within 12 s)
 restored:                                    host_up True
 ```
+
+## Firmware notes
+
+- After `drop=radio` (`esp_bt_controller_disable`) and `radio=on` (`esp_bt_controller_enable` plus
+  the same HCI setup) the controller answered every HCI command and reported the right BD_ADDR, but
+  never received the pad's next page. Reboot the board after a radio-off test.
 
 ## Captures in this repo
 
