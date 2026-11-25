@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -21,6 +22,8 @@
 #include "ota.h"
 #include "ota_util.h"
 #include "nvs.h"
+#include "bt_wake.h"
+#include "ping/ping_sock.h"
 #include "ota_httpd.h"
 #include "netserial.h"
 #include "nvs_flash.h"
@@ -45,6 +48,10 @@ static volatile bool s_got_ip;
 static volatile bool s_link_up;
 static char s_ip[16] = "none";
 static esp_eth_handle_t s_eth;
+static esp_netif_t *s_eth_netif;
+static volatile int64_t s_host_ping_ok_ms = -1;
+static esp_ping_handle_t s_ping;
+static bool s_bt_running;
 
 // Target MAC: NVS ("wol"/"mac") overrides CONFIG_WOL_TARGET_MAC. All zeros means unset.
 static uint8_t s_target[6];
@@ -110,6 +117,70 @@ static esp_err_t target_save(const uint8_t m[6])
     return e;
 }
 
+static bool nvs_get_n(const char *key, uint8_t *out, size_t n)
+{
+    nvs_handle_t h;
+    size_t len = n;
+    bool ok = false;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        ok = nvs_get_blob(h, key, out, &len) == ESP_OK && len == n;
+        nvs_close(h);
+    }
+    return ok;
+}
+
+static bool nvs_get_mac(const char *key, uint8_t out[6])
+{
+    return nvs_get_n(key, out, 6);
+}
+
+static int hexval(char c)
+{
+    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10
+         : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+}
+
+static int parse_key(const char *s, uint8_t out[16])
+{
+    if (strlen(s) != 32) {
+        return -1;
+    }
+    for (int i = 0; i < 16; i++) {
+        int hi = hexval(s[2 * i]), lo = hexval(s[2 * i + 1]);
+        if (hi < 0 || lo < 0) {
+            return -1;
+        }
+        out[i] = (uint8_t)(hi << 4 | lo);
+    }
+    return 0;
+}
+
+static esp_err_t nvs_set_val(const char *key, const void *v, size_t len)
+{
+    nvs_handle_t h;
+    ESP_RETURN_ON_ERROR(nvs_open(NVS_NS, NVS_READWRITE, &h), TAG, "nvs_open");
+    esp_err_t e = len ? nvs_set_blob(h, key, v, len) : ESP_ERR_INVALID_ARG;
+    if (e == ESP_OK) {
+        e = nvs_commit(h);
+    }
+    nvs_close(h);
+    return e;
+}
+
+static uint8_t nvs_get_byte(const char *key, uint8_t def)
+{
+    uint8_t v = def;
+    size_t len = 1;
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        if (nvs_get_blob(h, key, &v, &len) != ESP_OK || len != 1) {
+            v = def;
+        }
+        nvs_close(h);
+    }
+    return v;
+}
+
 // Magic packet as a raw Ethernet frame (EtherType 0x0842) to the broadcast address.
 // Needs only the Ethernet link: no IP, DHCP or route, so it works when the target is off
 // and cannot leave through Wi-Fi.
@@ -142,10 +213,100 @@ static esp_err_t wol_send(const uint8_t target[6])
 static void on_eth_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     switch (id) {
-    case ETHERNET_EVENT_CONNECTED:    s_link_up = true;  ESP_LOGI(TAG, "link up"); break;
+    case ETHERNET_EVENT_CONNECTED:
+        s_link_up = true;
+        ESP_LOGI(TAG, "link up");
+        esp_netif_create_ip6_linklocal(s_eth_netif);
+        break;
     case ETHERNET_EVENT_DISCONNECTED: s_link_up = false; ESP_LOGI(TAG, "link down"); break;
     default: break;
     }
+}
+
+// Host check: ping the IPv6 all-nodes address ff02::1 on the Ethernet link. A running Linux
+// host answers from its link-local address with no network configuration at all (it needs
+// only the interface up); a powered-off host cannot. Replies from our own address are ignored.
+static void on_ping_ok(esp_ping_handle_t h, void *arg)
+{
+    ip_addr_t from;
+    esp_ping_get_profile(h, ESP_PING_PROF_IPADDR, &from, sizeof(from));
+    esp_ip6_addr_t own;
+    if (from.type == IPADDR_TYPE_V6 && esp_netif_get_ip6_linklocal(s_eth_netif, &own) == ESP_OK &&
+        memcmp(from.u_addr.ip6.addr, own.addr, sizeof(own.addr)) == 0) {
+        return;
+    }
+    s_host_ping_ok_ms = esp_timer_get_time() / 1000;
+}
+
+static void on_got_ip6(void *arg, esp_event_base_t base, int32_t id, void *data)
+{
+    const ip_event_got_ip6_t *ev = data;
+    if (ev->esp_netif != s_eth_netif || s_ping) {
+        return;
+    }
+    ESP_LOGI(TAG, "ethernet ipv6 " IPV6STR, IPV62STR(ev->ip6_info.ip));
+    esp_ping_config_t pc = ESP_PING_DEFAULT_CONFIG();
+    pc.target_addr.type = IPADDR_TYPE_V6;
+    pc.target_addr.u_addr.ip6.addr[0] = PP_HTONL(0xff020000UL);
+    pc.target_addr.u_addr.ip6.addr[1] = 0;
+    pc.target_addr.u_addr.ip6.addr[2] = 0;
+    pc.target_addr.u_addr.ip6.addr[3] = PP_HTONL(1UL);
+    pc.count = ESP_PING_COUNT_INFINITE;
+    pc.interval_ms = 2000;
+    pc.timeout_ms = 1000;
+    pc.interface = esp_netif_get_netif_impl_index(s_eth_netif);
+    esp_ping_callbacks_t cb = { .on_ping_success = on_ping_ok };
+    if (esp_ping_new_session(&pc, &cb, &s_ping) == ESP_OK && esp_ping_start(s_ping) == ESP_OK) {
+        ESP_LOGI(TAG, "host check: pinging ff02::1 on ethernet");
+    } else {
+        ESP_LOGE(TAG, "host check: ping session failed");
+    }
+}
+
+static void on_press(void)
+{
+    if (!mac_is_set(s_target)) {
+        ESP_LOGW(TAG, "press detected but no WoL target set");
+        return;
+    }
+    wol_send(s_target);
+}
+
+// Host is up while something other than us answered ff02::1 on the Ethernet link in the last 8 s.
+static void host_watch_task(void *arg)
+{
+    for (;;) {
+        int64_t ok = s_host_ping_ok_ms;
+        bool up = ok >= 0 && esp_timer_get_time() / 1000 - ok < 8000;
+        if (s_bt_running) {
+            bt_wake_set_host_up(up);
+            bt_wake_tick();
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+static void bt_start_from_nvs(void)
+{
+    uint8_t host[6], pad[6];
+    if (!nvs_get_mac("bt_host", host) || !nvs_get_mac("bt_pad", pad)) {
+        ESP_LOGW(TAG, "bluetooth listener off: set host and pad with POST /bt");
+        return;
+    }
+    bt_wake_mode_t mode = (bt_wake_mode_t)nvs_get_byte("bt_mode", BT_WAKE_REJECT);
+    bt_scan_policy_t pol = (bt_scan_policy_t)nvs_get_byte("bt_scan", BT_SCAN_AUTO);
+    uint8_t ho = nvs_get_byte("bt_ho_s", 0xFF); // 0xFF: automatic handover off
+    bt_wake_set_handover(ho == 0xFF ? -1 : ho, (bt_drop_t)nvs_get_byte("bt_ho_m", BT_DROP_RESET));
+    bt_wake_set_scan_policy(pol);
+    uint8_t key[16];
+    bool have_key = nvs_get_n("bt_lk", key, 16);
+    esp_err_t e = bt_wake_start(host, pad, have_key ? key : NULL, mode, on_press);
+    memset(key, 0, sizeof(key));
+    if (e != ESP_OK) {
+        ESP_LOGE(TAG, "bluetooth listener failed: %s", esp_err_to_name(e));
+        return;
+    }
+    s_bt_running = true;
 }
 
 static void on_got_ip(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -154,6 +315,7 @@ static void on_got_ip(void *arg, esp_event_base_t base, int32_t id, void *data)
     ESP_LOGI(TAG, "ip " IPSTR " gw " IPSTR, IP2STR(&ev->ip_info.ip), IP2STR(&ev->ip_info.gw));
     snprintf(s_ip, sizeof(s_ip), IPSTR, IP2STR(&ev->ip_info.ip));
     s_got_ip = true;
+
 }
 
 static esp_err_t eth_start(void)
@@ -187,10 +349,12 @@ static esp_err_t eth_start(void)
 
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     esp_netif_t *netif = esp_netif_new(&netif_cfg);
+    s_eth_netif = netif;
     ESP_RETURN_ON_ERROR(esp_netif_attach(netif, esp_eth_new_netif_glue(eth)), TAG, "netif attach");
 
     ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, on_eth_event, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, on_got_ip, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_GOT_IP6, on_got_ip6, NULL));
     return esp_eth_start(eth);
 }
 
@@ -228,21 +392,21 @@ static void wifi_start(void)
 
 static esp_err_t status_get(httpd_req_t *req)
 {
-    char body[256], m[18];
+    char body[1152], m[18], bt[768] = "null";
+    if (s_bt_running) {
+        bt_wake_status_json(bt, sizeof(bt));
+    }
     mac_str(s_target, m);
     snprintf(body, sizeof(body),
              "{\"app\":\"esp32-wol-via-bt\",\"version\":\"%s\",\"partition\":\"%s\","
-             "\"ip\":\"%s\",\"eth_link\":%s,\"wol_target\":\"%s\",\"uptime_s\":%lld}\n",
+             "\"ip\":\"%s\",\"eth_link\":%s,\"wol_target\":\"%s\",\"uptime_s\":%lld,\"bt\":%s}\n",
              ota_running_version(), ota_running_label(), s_ip, s_link_up ? "true" : "false",
-             mac_is_set(s_target) ? m : "unset", (long long)(esp_timer_get_time() / 1000000));
+             mac_is_set(s_target) ? m : "unset", (long long)(esp_timer_get_time() / 1000000), bt);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, body);
 }
 
-// POST /wol?mac=aa:bb:cc:dd:ee:ff  stores the target MAC in NVS (does not send).
-// POST /wol                        sends a magic packet to the stored target.
-// Same HTTP Basic credentials as /ota.
-static esp_err_t wol_post(httpd_req_t *req)
+static bool req_auth_ok(httpd_req_t *req)
 {
     char hdr[256];
     size_t hl = httpd_req_get_hdr_value_len(req, "Authorization");
@@ -251,7 +415,121 @@ static esp_err_t wol_post(httpd_req_t *req)
         !ota_basic_auth_ok(hdr, CONFIG_OTA_USER, CONFIG_OTA_PASSWORD)) {
         httpd_resp_set_status(req, "401 Unauthorized");
         httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"wol\"");
-        return httpd_resp_sendstr(req, "Unauthorized\n");
+        httpd_resp_sendstr(req, "Unauthorized\n");
+        return false;
+    }
+    return true;
+}
+
+// POST /bt with any subset of:
+//   host=..  pad=..            addresses (a new host address restarts: BD_ADDR is latched at init)
+//   mode=reject|silent|accept  how to answer the pad's page
+//   scan=auto|on|off           page scan policy
+//   lk=<32 hex>                link key for the pad, as in BlueZ's info file (never echoed)
+//   handover=<s>|off  method=detach|reset|radio   automatic drop after the host comes up
+//   drop=detach|reset|radio    let go of a held pad now;  radio=on  re-enable after drop=radio
+// Everything except drop and radio is stored in NVS.
+static esp_err_t bt_post(httpd_req_t *req)
+{
+    if (!req_auth_ok(req)) {
+        return ESP_OK;
+    }
+    char q[200], v[32];
+    if (httpd_req_get_url_query_str(req, q, sizeof(q)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "see the comment above bt_post");
+        return ESP_OK;
+    }
+    bool restart = false;
+    uint8_t m[6];
+    if (httpd_query_key_value(q, "pad", v, sizeof(v)) == ESP_OK) {
+        if (parse_mac(v, m) != 0 || nvs_set_val("bt_pad", m, 6) != ESP_OK) {
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad pad");
+            return ESP_OK;
+        }
+        if (s_bt_running) {
+            bt_wake_set_pad(m);
+        } else {
+            restart = true;
+        }
+    }
+    if (httpd_query_key_value(q, "host", v, sizeof(v)) == ESP_OK) {
+        uint8_t old[6];
+        bool had = nvs_get_mac("bt_host", old);
+        if (parse_mac(v, m) != 0 || nvs_set_val("bt_host", m, 6) != ESP_OK) {
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad host");
+            return ESP_OK;
+        }
+        if (!had || !s_bt_running || memcmp(old, m, 6) != 0) {
+            restart = true;
+        }
+    }
+    char kv[40];
+    if (httpd_query_key_value(q, "lk", kv, sizeof(kv)) == ESP_OK) {
+        uint8_t key[16];
+        if (parse_key(kv, key) != 0 || nvs_set_val("bt_lk", key, 16) != ESP_OK) {
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "lk must be 32 hex digits");
+            return ESP_OK;
+        }
+        if (s_bt_running) {
+            bt_wake_set_link_key(key);
+        }
+        memset(key, 0, sizeof(key));
+        memset(kv, 0, sizeof(kv));
+        memset(q, 0, sizeof(q));
+        return httpd_resp_sendstr(req, "link key saved\n");
+    }
+    if (httpd_query_key_value(q, "handover", v, sizeof(v)) == ESP_OK) {
+        int sec = strcmp(v, "off") == 0 ? -1 : atoi(v);
+        uint8_t b = sec < 0 || sec > 254 ? 0xFF : (uint8_t)sec;
+        nvs_set_val("bt_ho_s", &b, 1);
+    }
+    if (httpd_query_key_value(q, "method", v, sizeof(v)) == ESP_OK) {
+        uint8_t mt = strcmp(v, "detach") == 0 ? BT_DROP_DETACH
+                   : strcmp(v, "radio") == 0  ? BT_DROP_RADIO : BT_DROP_RESET;
+        nvs_set_val("bt_ho_m", &mt, 1);
+    }
+    if (httpd_query_key_value(q, "handover", v, sizeof(v)) == ESP_OK ||
+        httpd_query_key_value(q, "method", v, sizeof(v)) == ESP_OK) {
+        uint8_t ho = nvs_get_byte("bt_ho_s", 0xFF);
+        bt_wake_set_handover(ho == 0xFF ? -1 : ho, (bt_drop_t)nvs_get_byte("bt_ho_m", BT_DROP_RESET));
+    }
+    if (httpd_query_key_value(q, "drop", v, sizeof(v)) == ESP_OK && s_bt_running) {
+        bt_drop_t mt = strcmp(v, "detach") == 0 ? BT_DROP_DETACH
+                     : strcmp(v, "radio") == 0  ? BT_DROP_RADIO : BT_DROP_RESET;
+        esp_err_t e = bt_wake_drop(mt);
+        return httpd_resp_sendstr(req, e == ESP_OK ? "dropped\n" : "drop failed\n");
+    }
+    if (httpd_query_key_value(q, "radio", v, sizeof(v)) == ESP_OK && s_bt_running) {
+        esp_err_t e = bt_wake_radio_on();
+        return httpd_resp_sendstr(req, e == ESP_OK ? "radio on\n" : "radio on failed\n");
+    }
+    if (httpd_query_key_value(q, "mode", v, sizeof(v)) == ESP_OK) {
+        uint8_t md = strcmp(v, "silent") == 0 ? BT_WAKE_SILENT
+                   : strcmp(v, "accept") == 0 ? BT_WAKE_ACCEPT : BT_WAKE_REJECT;
+        nvs_set_val("bt_mode", &md, 1);
+        bt_wake_set_mode((bt_wake_mode_t)md);
+    }
+    if (httpd_query_key_value(q, "scan", v, sizeof(v)) == ESP_OK) {
+        uint8_t sp = strcmp(v, "on") == 0 ? BT_SCAN_ON : strcmp(v, "off") == 0 ? BT_SCAN_OFF
+                                                                                 : BT_SCAN_AUTO;
+        nvs_set_val("bt_scan", &sp, 1);
+        bt_wake_set_scan_policy((bt_scan_policy_t)sp);
+    }
+    if (restart && nvs_get_mac("bt_host", m) && nvs_get_mac("bt_pad", m)) {
+        httpd_resp_sendstr(req, "saved, restarting to apply the bluetooth address\n");
+        vTaskDelay(pdMS_TO_TICKS(500));
+        esp_restart();
+    }
+    return httpd_resp_sendstr(req, "saved\n");
+}
+
+// POST /wol?mac=aa:bb:cc:dd:ee:ff  stores the target MAC in NVS (does not send).
+// POST /wol                        sends a magic packet to the stored target.
+// Same HTTP Basic credentials as /ota.
+static esp_err_t wol_post(httpd_req_t *req)
+{
+    if (!req_auth_ok(req)) {
+        return ESP_OK;
     }
 
     char query[64], val[32];
@@ -289,7 +567,7 @@ static esp_err_t wol_post(httpd_req_t *req)
 static void http_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-    cfg.stack_size = 6144;
+    cfg.stack_size = 8192;
     httpd_handle_t server = NULL;
     ESP_ERROR_CHECK(httpd_start(&server, &cfg));
 
@@ -303,6 +581,8 @@ static void http_start(void)
     ESP_ERROR_CHECK(ota_httpd_register(server, CONFIG_OTA_USER, CONFIG_OTA_PASSWORD));
     static const httpd_uri_t wol = { .uri = "/wol", .method = HTTP_POST, .handler = wol_post };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &wol));
+    static const httpd_uri_t bt = { .uri = "/bt", .method = HTTP_POST, .handler = bt_post };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &bt));
     ESP_LOGI(TAG, "POST /ota and POST /wol enabled");
 }
 
@@ -355,6 +635,8 @@ void app_main(void)
     wifi_start();
 #endif
     http_start();
+    bt_start_from_nvs();
+    xTaskCreate(host_watch_task, "host_watch", 3072, NULL, 4, NULL);
     if (ota_pending_verify()) {
         xTaskCreate(selftest_task, "ota_selftest", 4096, NULL, 5, NULL);
     }

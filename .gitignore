@@ -5,3 +5,4 @@ managed_components/
 dependencies.lock
 sdkconfig.local
 main/wifi_creds_local.h
+logs/
