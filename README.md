@@ -7,8 +7,9 @@ The BC-250 is an AMD mining card repurposed as a Steam gaming box. It cannot wak
 controller when it is powered off, because its Bluetooth and USB are unpowered or asleep. This
 board stays powered all the time, listens for the controller over Bluetooth, and wakes the box.
 
-Status: an ESP-IDF scaffold builds (Ethernet bring-up and a Wake-on-LAN sender). It has not been
-flashed or run on hardware. Bluetooth detection is not written.
+Status: firmware runs on the board with OTA updates, rollback and a network console (netserial).
+OTA and rollback are tested over Wi-Fi. Ethernet link and the Wake-on-LAN packet are not yet
+tested on hardware. Bluetooth detection is not written.
 
 ## What the board does
 
@@ -93,7 +94,28 @@ idf.py build
 idf.py -p /dev/ttyUSBx flash monitor
 ```
 
-The WT32-ETH01 has no USB. Flash it through an external USB-serial adapter set to 3.3 V logic:
+### Over the network (normal path)
+
+```
+tools/ota_push.sh <board-ip>     # uploads build/esp32-wol-via-bt.bin to POST /ota, then checks GET /
+python3 -I components/netserial/host/netserial.py <board-ip> --log run.log   # network console
+curl http://<board-ip>/          # version, running slot, ip, uptime
+```
+
+- `POST /ota` uses HTTP Basic auth, user `admin`. The password is in `sdkconfig.local`
+  (git-ignored, `CONFIG_OTA_PASSWORD`); without it the endpoint is not registered.
+- A new image must get an IP address within 120 s or the bootloader rolls back to the previous
+  slot. Tested 2026-11-25: a deliberately network-less image rolled back after about 2 min.
+- Wi-Fi station is compiled in only when the git-ignored `main/wifi_creds_local.h` exists (it maps
+  the quickvolt bench credentials, see the netserial example). Ethernet is always on.
+- `components/ota` is a copy of the OTA component from `esp32-s3-dw3110` (branch `anchor-survey`,
+  last component change `cc42d07`). `components/netserial` is a git submodule; clone with
+  `--recursive` or run `git submodule update --init`.
+
+### Over serial (first flash, or recovery)
+
+The WT32-ETH01 has no USB. Flash it through an external USB-serial adapter set to 3.3 V logic, or through the Raspberry
+Pi `cu-rpi4` as in `docs/wiring-rpi-flasher.md`:
 
 | Adapter | WT32-ETH01 |
 |---|---|

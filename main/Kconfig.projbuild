@@ -18,3 +18,25 @@ menu "WoL via BT"
         default 9
 
 endmenu
+
+menu "OTA"
+
+    config OTA_USER
+        string "HTTP Basic user for POST /ota"
+        default "admin"
+
+    config OTA_PASSWORD
+        string "HTTP Basic password for POST /ota"
+        default ""
+        help
+            Set it in sdkconfig.local (gitignored), not here. When empty, /ota is not
+            registered and the board can only be updated over serial.
+
+    config OTA_SELFTEST_TIMEOUT_MS
+        int "Self-test window for a new image (ms)"
+        default 120000
+        help
+            A freshly updated image must get an IP address within this window or it is
+            rolled back to the previous image.
+
+endmenu

@@ -1,0 +1,3 @@
+[submodule "components/netserial"]
+	path = components/netserial
+	url = git@github.com:Nero7991/netserial.git
