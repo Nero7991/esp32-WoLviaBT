@@ -423,12 +423,14 @@ static bool req_auth_ok(httpd_req_t *req)
 
 // POST /bt with any subset of:
 //   host=..  pad=..            addresses (a new host address restarts: BD_ADDR is latched at init)
-//   mode=reject|silent|accept  how to answer the pad's page
+//   mode=reject|silent|accept|probe  how to answer the pad's page (probe: measurement only)
 //   scan=auto|on|off           page scan policy
 //   lk=<32 hex>                link key for the pad, as in BlueZ's info file (never echoed)
 //   handover=<s>|off  method=detach|reset|radio   automatic drop after the host comes up
 //   drop=detach[&reason=hex]|reset|radio|l2cap   let go of a held pad now (radio=on re-enables)
 //   role=central|peripheral    role requested when accepting (not stored)
+//   reject_reason=<hex>        reason for reject mode, default 0F (not stored)
+//   cutoff=0..6                accept-mode measurement stage, see bt_wake.h (not stored)
 // Everything except drop and radio is stored in NVS.
 static esp_err_t bt_post(httpd_req_t *req)
 {
@@ -494,6 +496,12 @@ static esp_err_t bt_post(httpd_req_t *req)
         uint8_t ho = nvs_get_byte("bt_ho_s", 0xFF);
         bt_wake_set_handover(ho == 0xFF ? -1 : ho, (bt_drop_t)nvs_get_byte("bt_ho_m", BT_DROP_RESET));
     }
+    if (httpd_query_key_value(q, "cutoff", v, sizeof(v)) == ESP_OK && s_bt_running) {
+        bt_wake_set_cutoff((uint8_t)atoi(v));
+    }
+    if (httpd_query_key_value(q, "reject_reason", v, sizeof(v)) == ESP_OK && s_bt_running) {
+        bt_wake_set_reject_reason((uint8_t)strtoul(v, NULL, 16));
+    }
     if (httpd_query_key_value(q, "role", v, sizeof(v)) == ESP_OK && s_bt_running) {
         bt_wake_set_accept_central(strcmp(v, "peripheral") != 0);
     }
@@ -516,7 +524,8 @@ static esp_err_t bt_post(httpd_req_t *req)
     }
     if (httpd_query_key_value(q, "mode", v, sizeof(v)) == ESP_OK) {
         uint8_t md = strcmp(v, "silent") == 0 ? BT_WAKE_SILENT
-                   : strcmp(v, "accept") == 0 ? BT_WAKE_ACCEPT : BT_WAKE_REJECT;
+                   : strcmp(v, "accept") == 0 ? BT_WAKE_ACCEPT
+                   : strcmp(v, "probe") == 0  ? BT_WAKE_PROBE : BT_WAKE_REJECT;
         nvs_set_val("bt_mode", &md, 1);
         bt_wake_set_mode((bt_wake_mode_t)md);
     }

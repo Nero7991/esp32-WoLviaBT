@@ -14,6 +14,8 @@ typedef enum {
     BT_WAKE_SILENT = 1, // do not answer; the controller rejects after Connection_Accept_Timeout
     BT_WAKE_ACCEPT = 2, // accept, authenticate with the host's link key, open the HID channels
                         // and hold the pad connected until the handover (needs a link key)
+    BT_WAKE_PROBE = 3,  // measurement: on each Connection Request reset the controller (the
+                        // half-open link vanishes, nothing is sent) and page scan again
 } bt_wake_mode_t;
 
 typedef enum {
@@ -55,6 +57,15 @@ esp_err_t bt_wake_detach(uint8_t reason);
 // Role requested when accepting the pad: true = become central (role switch, as BlueZ does),
 // false = stay peripheral so the pad remains central.
 void bt_wake_set_accept_central(bool central);
+
+// Accept-mode measurement: behave like the host up to a stage, then stop answering there.
+// 0 none, 1 ignore the SDP channel request, 2 ignore SDP queries, 3 ignore the link key request,
+// 4 negative link key reply, 5 ignore the HID interrupt channel request, 6 ignore configuration
+// requests on the HID channels.
+void bt_wake_set_cutoff(uint8_t stage);
+
+// Reason used by reject mode (default 0x0F; 0x0D limited resources, 0x0E security reasons).
+void bt_wake_set_reject_reason(uint8_t reason);
 esp_err_t bt_wake_radio_on(void);
 
 // Feed the host state (from the Ethernet ping check). A true -> false edge starts the

@@ -76,6 +76,22 @@ for 20 s (11347 reports) and 14 s (7581 reports) in two runs.
 
 | E1 | accepted **without** role switch (pad stays central, no Role Change event), SDP and both HID channels open, held 751 ms, then `HCI_Reset` | no re-page in the following 60 s (board kept page scanning with the BC-250's Bluetooth off) |
 
+| V2 | probe mode: on the Connection Request the board resets its controller 5 ms later (half-open link vanishes, no reject sent) and page scans again | one page only, no re-page; light about 22 s (timed) |
+| V1 | nothing answers at all (BC-250 Bluetooth off, board not scanning); board starts page scanning 15 s after the press and listens 45 s | no page arrived; light about 15-16 s (timed) |
+
+| R-0D | reject with reason 0x0D (limited resources) | one page, Connection Complete status 0x0D after 79 ms, no re-page; light under 10 s |
+| R-0E | reject with reason 0x0E (security reasons) | one page, no re-page; light under 10 s |
+
+| C1 | accept, never answer the pad's L2CAP Connection Request for SDP | no retransmission; pad held the link **50.1 s**, then disconnected (reason 0x08, connection timeout); light on throughout; no re-page |
+| C2 | accept, open SDP, never answer the SDP query | no retransmission; pad held the link and kept its light on for **172.6 s and counting**, until the board dropped it with a reset; light off a few seconds later (supervision timeout); no re-page |
+
+| C4 | accept, answer SDP, then **negative** Link Key Request Reply | pad started Secure Simple Pairing 1.6 s later (IO capability NoInputNoOutput, auth requirement 0x04 general bonding, no MITM); board refused (reason 0x18); SSP status 0x05, disconnect reason 0x05; light off quickly; no re-page. Pairing with the BC-250 survived (next press connected normally) |
+
+So with nothing answering, the pad pages for roughly 15 s after a press and then powers off;
+an unanswered or vanished connection attempt (V2) does not extend that. The bench BC-250 needs
+36 s from the magic packet to answer ping, so a cold boot cannot catch the pad's paging window
+even if the board stays silent.
+
 BlueZ's input plugin also pages the pad by itself after the adapter powers on and periodically
 afterwards (journal: `control_connect_cb() ... Host is down` at 12:16:25, 12:16:50, 12:17:50,
 12:18:43). None of these ever succeeded. **A DualSense that is not connected is not connectable:
@@ -127,6 +143,24 @@ Vendor reports that touch pairing and power (controllers.fandom wiki, dualsensec
 Custom firmware is not an option: no DualSense firmware dump or custom firmware has been published;
 for the DS4 only partial work exists (fail0verflow could not reach SWD; an unverified serial
 bootloader dump guide).
+
+### What the cutoff tests show (2026-11-25)
+
+The pad's firmware has two regimes:
+- **Before its page succeeds** it keeps paging for about 15 s (V1).
+- **Once a host has answered the page**, any failure ends in power-off with no new page: reject (any
+  reason), accept timeout, vanished link, supervision timeout, failed authentication, failed
+  pairing. Waiting points can stretch the attempt (C1: 50 s until a connection timeout; C2: the pad
+  waits on an unanswered SDP query indefinitely, light on), but they only delay the power-off.
+
+A held pad can therefore serve as a visible "waking" indicator, but nothing found here makes it
+page again for the real host. A one-press wake needs the host itself to answer the first page
+(e.g. suspend-to-RAM with wake from its own Bluetooth adapter), or the board to remain the pad's
+host (relay).
+
+Security note from C4: a device that answers the page with the host's BD_ADDR and has no link key
+gets the pad to start Just Works pairing (NoInputNoOutput) with no confirmation on the pad. The
+board refuses it; a device that accepted would end up bonded to the pad.
 
 ## Host-up detection (decides when the board must stop answering for the host's address)
 

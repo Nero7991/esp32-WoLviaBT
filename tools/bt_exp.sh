@@ -2,6 +2,8 @@
 # Bench helper for the handover experiments. Usage:
 #   tools/bt_exp.sh arm [role]        BC-250 BT off, board accepting + scanning (role central|peripheral)
 #   tools/bt_exp.sh drop <query>      wait until held, send POST /bt?<query>, watch 60 s for a re-page
+#   tools/bt_exp.sh cutoff <0-6>      BC-250 BT off, board accepting with a cutoff stage
+#   tools/bt_exp.sh show              board log lines since the last `cutoff`
 #   tools/bt_exp.sh restore           board reject+auto, BC-250 BT on
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -22,8 +24,17 @@ drop)
     echo "$(date +%T) POST /bt?$2 -> $(post "$2")"
     sleep 60
     tail -n +"$((n0 + 1))" "$LOG" | grep -E "bt_wake: (DROP|HOLD|CONN|DISCONN|REPAGE|L2CAP|EVENT|ENCRYPT|LINK|first)" | cut -c12-23,40- ;;
+cutoff)
+    # arm accept mode with a cutoff stage; remember the log position for `show`
+    ssh -o BatchMode=yes $H 'bluetoothctl power off' >/dev/null
+    post "mode=accept&scan=on&handover=off&role=central&cutoff=$2"
+    wc -l < "$LOG" > logs/.exp_mark
+    bt '{k:b[k] for k in ("mode","scanning","cutoff","link_key")}' ;;
+show)
+    tail -n +"$(( $(cat logs/.exp_mark) + 1 ))" "$LOG" | grep -E "bt_wake: " \
+        | grep -vE "page scan|host (up|down)|handover" | cut -c12-23,40- ;;
 restore)
-    post "mode=reject&scan=auto&role=central"
+    post "mode=reject&scan=auto&role=central&cutoff=0"
     ssh -o BatchMode=yes $H 'bluetoothctl power on' >/dev/null
     bt '{k:b[k] for k in ("mode","scan_policy","scanning","host_up")}' ;;
 esac

@@ -59,6 +59,9 @@ static const char *TAG = "bt_wake";
 #define EV_PIN_REQUEST     0x16
 #define EV_LINK_KEY_REQ    0x17
 #define EV_IO_CAP_REQ      0x31
+#define EV_IO_CAP_RSP      0x32
+#define EV_USER_CONFIRM    0x33
+#define EV_SSP_COMPLETE    0x36
 
 // L2CAP signalling
 #define L2_CMD_REJECT   0x01
@@ -110,6 +113,8 @@ static int s_handover_delay_s = -1;
 static bt_drop_t s_handover_method = BT_DROP_RESET;
 static volatile int64_t s_handover_at_ms = -1;
 static bool s_accept_central = true;
+static uint8_t s_reject_reason = 0x0F;
+static uint8_t s_cutoff;
 static int64_t s_drop_at_ms = -1;
 
 // Held connection
@@ -353,15 +358,27 @@ static void on_conn_request(const hci_rx_t *m)
 
     uint8_t r[7];
     addr_to_hci(addr, r);
-    if (is_pad && link == 1 && accepting()) {
+    bool probe_reset = false;
+    if (s_mode == BT_WAKE_PROBE) {
+        probe_reset = true; // after the press bookkeeping below
+    } else if (is_pad && link == 1 && accepting()) {
         r[6] = s_accept_central ? 0x00 : 0x01; // 0x00 role switch to central (as BlueZ)
         hci_cmd(OP_ACCEPT_CONN_REQ, r, 7, false);
         ESP_LOGI(TAG, "accepting %s", a);
     } else if (s_mode != BT_WAKE_SILENT) {
-        r[6] = 0x0F; // Connection Rejected due to Unacceptable BD_ADDR
+        r[6] = s_reject_reason; // default 0x0F: Connection Rejected due to Unacceptable BD_ADDR
         hci_cmd(OP_REJECT_CONN_REQ, r, 7, false);
+        ESP_LOGI(TAG, "rejected with reason 0x%02X", s_reject_reason);
     }
 
+    if (probe_reset) {
+        if (s_drop_at_ms < 0 || !is_pad) {
+            s_drop_at_ms = t; // first page of this probe: REPAGE times are relative to it
+        }
+        controller_setup();
+        apply_scan();
+        ESP_LOGI(TAG, "PROBE reset done t=%lld (+%lld ms)", now_ms(), now_ms() - t);
+    }
     if (!is_pad) {
         return;
     }
@@ -418,6 +435,10 @@ static void on_signalling(const uint8_t *p, uint16_t len, int64_t t)
             uint16_t psm = le16(d), scid = le16(&d[2]);
             int slot = psm == PSM_HID_CTRL ? 0 : psm == PSM_HID_INTR ? 1 : psm == PSM_SDP ? 2 : -1;
             ESP_LOGI(TAG, "L2CAP conn req t=%lld psm 0x%04X scid 0x%04X", t, psm, scid);
+            if ((s_cutoff == 1 && psm == PSM_SDP) || (s_cutoff == 5 && psm == PSM_HID_INTR)) {
+                ESP_LOGI(TAG, "CUTOFF %u: not answering conn req for psm 0x%04X", s_cutoff, psm);
+                break;
+            }
             put16(&out[2], scid);
             put16(&out[6], 0); // status
             if (slot < 0) {
@@ -443,6 +464,10 @@ static void on_signalling(const uint8_t *p, uint16_t len, int64_t t)
         case L2_CONF_REQ: {
             l2_chan_t *c = chan_by_local(le16(d));
             if (!c) {
+                break;
+            }
+            if (s_cutoff == 6 && c->psm != PSM_SDP) {
+                ESP_LOGI(TAG, "CUTOFF 6: not answering config req t=%lld on psm 0x%04X", t, c->psm);
                 break;
             }
             put16(&out[0], c->remote);
@@ -512,6 +537,10 @@ static void on_sdp(const uint8_t *p, uint16_t len, int64_t t)
         n += snprintf(hex + n, sizeof(hex) - n, "%02X ", p[i]);
     }
     ESP_LOGI(TAG, "SDP request t=%lld pdu 0x%02X: %s", t, pdu, hex);
+    if (s_cutoff == 2) {
+        ESP_LOGI(TAG, "CUTOFF 2: not answering SDP");
+        return;
+    }
     uint8_t r[16];
     r[1] = p[1]; // transaction id
     r[2] = p[2];
@@ -624,7 +653,12 @@ static void on_event(const hci_rx_t *m)
         addr_from_hci(&d[3], a6);
         fmt_addr(a6, a);
         memcpy(r, &d[3], 6);
-        if (s_have_key && memcmp(a6, s_pad, 6) == 0) {
+        if (s_cutoff == 3) {
+            ESP_LOGI(TAG, "LINK_KEY_REQ t=%lld from %s: CUTOFF 3, no reply", t, a);
+        } else if (s_cutoff == 4) {
+            hci_cmd(OP_LINK_KEY_NEG_REPLY, r, 6, false);
+            ESP_LOGI(TAG, "LINK_KEY_REQ t=%lld from %s: CUTOFF 4, negative reply", t, a);
+        } else if (s_have_key && memcmp(a6, s_pad, 6) == 0) {
             memcpy(&r[6], s_link_key, 16); // never logged
             hci_cmd(OP_LINK_KEY_REPLY, r, 22, false);
             ESP_LOGI(TAG, "LINK_KEY_REQ t=%lld from %s: replied with stored key", t, a);
@@ -643,6 +677,13 @@ static void on_event(const hci_rx_t *m)
         r[6] = 0x18; // pairing not allowed: we only reuse the host's existing key
         hci_cmd(OP_IO_CAP_NEG_REPLY, r, 7, false);
         ESP_LOGW(TAG, "IO capability request t=%lld (pairing attempt): refused", t);
+        return;
+    case EV_IO_CAP_RSP:
+        ESP_LOGI(TAG, "IO_CAP_RESPONSE t=%lld io %u oob %u auth 0x%02X (pad wants to pair)", t,
+                 d[9], d[10], d[11]);
+        return;
+    case EV_SSP_COMPLETE:
+        ESP_LOGI(TAG, "SSP_COMPLETE t=%lld status 0x%02X", t, d[3]);
         return;
     case EV_AUTH_COMPLETE:
         ESP_LOGI(TAG, "AUTH_COMPLETE t=%lld status 0x%02X", t, d[3]);
@@ -739,6 +780,9 @@ void bt_wake_set_link_key(const uint8_t key[16])
 void bt_wake_set_mode(bt_wake_mode_t mode)
 {
     s_mode = mode;
+    if (mode == BT_WAKE_PROBE) {
+        s_drop_at_ms = -1; // the next page starts a new probe timeline
+    }
     if (s_tx_lock) {
         uint16_t to = mode == BT_WAKE_SILENT ? ACCEPT_TIMEOUT_SILENT : ACCEPT_TIMEOUT_DEFAULT;
         uint8_t p[2] = { to & 0xFF, to >> 8 };
@@ -758,6 +802,17 @@ void bt_wake_set_handover(int delay_s, bt_drop_t method)
 {
     s_handover_delay_s = delay_s;
     s_handover_method = method;
+}
+
+void bt_wake_set_cutoff(uint8_t stage)
+{
+    s_cutoff = stage;
+    ESP_LOGI(TAG, "cutoff stage %u", stage);
+}
+
+void bt_wake_set_reject_reason(uint8_t reason)
+{
+    s_reject_reason = reason;
 }
 
 void bt_wake_set_accept_central(bool central)
@@ -868,7 +923,7 @@ void bt_wake_tick(void)
 
 void bt_wake_status_json(char *buf, size_t len)
 {
-    static const char *modes[] = { "reject", "silent", "accept" };
+    static const char *modes[] = { "reject", "silent", "accept", "probe" };
     static const char *drops[] = { "detach", "reset", "radio", "l2cap" };
     char h[18], p[18];
     fmt_addr(s_bdaddr_read, h);
@@ -879,7 +934,7 @@ void bt_wake_status_json(char *buf, size_t len)
              "\"holding\":%s,\"held_ms\":%lld,\"hid_ctrl\":%s,\"hid_intr\":%s,\"hid_reports\":%lu,"
              "\"last_hold_ms\":%lld,\"last_disc_reason\":%u,\"handover_s\":%d,"
              "\"handover_method\":\"%s\",\"requests\":%lu,\"pad_requests\":%lu,\"presses\":%lu,"
-             "\"ignored\":%lu,\"last_burst_count\":%lu,\"last_burst_span_ms\":%lld}",
+             "\"ignored\":%lu,\"last_burst_count\":%lu,\"last_burst_span_ms\":%lld,\"cutoff\":%u}",
              h, p, s_have_key ? "true" : "false", modes[s_mode],
              s_policy == BT_SCAN_AUTO ? "auto" : s_policy == BT_SCAN_ON ? "on" : "off",
              s_radio_on ? "true" : "false", s_scanning ? "true" : "false",
@@ -888,5 +943,6 @@ void bt_wake_status_json(char *buf, size_t len)
              s_ch[1].open ? "true" : "false", (unsigned long)s_hid_reports, s_last_hold_ms,
              s_last_disc_reason, s_handover_delay_s, drops[s_handover_method],
              (unsigned long)s_requests, (unsigned long)s_pad_requests, (unsigned long)s_presses,
-             (unsigned long)s_ignored, (unsigned long)s_last_burst_count, s_last_burst_span_ms);
+             (unsigned long)s_ignored, (unsigned long)s_last_burst_count, s_last_burst_span_ms,
+             s_cutoff);
 }
