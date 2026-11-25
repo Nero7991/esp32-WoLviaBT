@@ -1,3 +1,6 @@
 [submodule "components/netserial"]
 	path = components/netserial
 	url = git@github.com:Nero7991/netserial.git
+[submodule "components/esp-bringup"]
+	path = components/esp-bringup
+	url = git@github.com:Nero7991/esp-bringup.git

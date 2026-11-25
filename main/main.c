@@ -28,13 +28,12 @@
 #include "netserial.h"
 #include "nvs_flash.h"
 
-// Wi-Fi station is built in only when the git-ignored credentials header exists.
+#include "bringup.h"
+
+// Optional, git-ignored: build-time Wi-Fi credentials used only to seed the settings on a board
+// that has none (see settings_seed).
 #if __has_include("wifi_creds_local.h")
 #include "wifi_creds_local.h"
-#include "esp_wifi.h"
-#define HAVE_WIFI 1
-#else
-#define HAVE_WIFI 0
 #endif
 
 static const char *TAG = "wol";
@@ -88,29 +87,14 @@ static void mac_str(const uint8_t m[6], char out[18])
 
 static void target_load(void)
 {
-    nvs_handle_t h;
-    size_t len = sizeof(s_target);
-    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
-        esp_err_t e = nvs_get_blob(h, NVS_KEY, s_target, &len);
-        nvs_close(h);
-        if (e == ESP_OK && len == 6) {
-            return;
-        }
-    }
-    if (parse_mac(CONFIG_WOL_TARGET_MAC, s_target) != 0) {
+    if (!bringup_get_mac("wol_mac", s_target)) {
         memset(s_target, 0, sizeof(s_target));
     }
 }
 
 static esp_err_t target_save(const uint8_t m[6])
 {
-    nvs_handle_t h;
-    ESP_RETURN_ON_ERROR(nvs_open(NVS_NS, NVS_READWRITE, &h), TAG, "nvs_open");
-    esp_err_t e = nvs_set_blob(h, NVS_KEY, m, 6);
-    if (e == ESP_OK) {
-        e = nvs_commit(h);
-    }
-    nvs_close(h);
+    esp_err_t e = bringup_set_mac("wol_mac", m);
     if (e == ESP_OK) {
         memcpy(s_target, m, 6);
     }
@@ -127,11 +111,6 @@ static bool nvs_get_n(const char *key, uint8_t *out, size_t n)
         nvs_close(h);
     }
     return ok;
-}
-
-static bool nvs_get_mac(const char *key, uint8_t out[6])
-{
-    return nvs_get_n(key, out, 6);
 }
 
 static int hexval(char c)
@@ -180,6 +159,67 @@ static uint8_t nvs_get_byte(const char *key, uint8_t def)
     }
     return v;
 }
+
+// ---- settings (esp-bringup) ----
+
+#define SET_NS "wolbt"
+
+static const bringup_field_t s_fields[] = {
+    { .key = "bt_host", .label = "Host Bluetooth adapter", .group = "Bluetooth",
+      .help = "The host's adapter address: bluetoothctl show", .type = BRINGUP_T_MAC,
+      .required = true },
+    { .key = "bt_pad", .label = "Controller address", .group = "Bluetooth",
+      .help = "The DualSense paired with the host: bluetoothctl devices Paired",
+      .type = BRINGUP_T_MAC, .required = true },
+    { .key = "bt_lk", .label = "Controller link key", .group = "Bluetooth",
+      .help = "Only for the accept-mode experiments. From /var/lib/bluetooth/<adapter>/<pad>/info",
+      .type = BRINGUP_T_HEX, .max = 16, .secret = true },
+    { .key = "wol_mac", .label = "Host wired MAC (Wake-on-LAN)", .group = "Wake",
+      .help = "The host's Ethernet MAC, the one cabled to this board", .type = BRINGUP_T_MAC,
+      .required = true },
+};
+
+static void mac_to_str(const uint8_t m[6], char out[18])
+{
+    snprintf(out, 18, "%02x:%02x:%02x:%02x:%02x:%02x", m[0], m[1], m[2], m[3], m[4], m[5]);
+}
+
+// Fill settings on a board that has none: build-time Wi-Fi and admin password, and values the
+// firmware before esp-bringup kept as blobs in the "wol" namespace.
+static void settings_seed(void)
+{
+#ifdef WIFI_SSID
+    bringup_seed(BRINGUP_KEY_WIFI_SSID, WIFI_SSID);
+    bringup_seed(BRINGUP_KEY_WIFI_PASS, WIFI_PASSWORD);
+#endif
+    if (strlen(CONFIG_OTA_PASSWORD) >= 8) {
+        bringup_seed(BRINGUP_KEY_ADMIN_PASS, CONFIG_OTA_PASSWORD);
+    }
+    uint8_t b[16];
+    char s[40];
+    if (nvs_get_n("bt_host", b, 6)) { mac_to_str(b, s); bringup_seed("bt_host", s); }
+    if (nvs_get_n("bt_pad", b, 6))  { mac_to_str(b, s); bringup_seed("bt_pad", s); }
+    if (nvs_get_n("mac", b, 6))     { mac_to_str(b, s); bringup_seed("wol_mac", s); }
+    if (nvs_get_n("bt_lk", b, 16)) {
+        for (int i = 0; i < 16; i++) {
+            snprintf(&s[2 * i], 3, "%02x", b[i]);
+        }
+        bringup_seed("bt_lk", s);
+        memset(s, 0, sizeof(s));
+    }
+    memset(b, 0, sizeof(b));
+}
+
+static const bringup_config_t s_setup = {
+    .product = "WoL via BT",
+    .ap_ssid_prefix = "WoLviaBT",
+    .ap_password = "wolviabt",
+    .hostname_prefix = "wolviabt",
+    .nvs_namespace = SET_NS,
+    .fields = s_fields,
+    .n_fields = sizeof(s_fields) / sizeof(s_fields[0]),
+    .on_seed = settings_seed,
+};
 
 // Magic packet as a raw Ethernet frame (EtherType 0x0842) to the broadcast address.
 // Needs only the Ethernet link: no IP, DHCP or route, so it works when the target is off
@@ -289,8 +329,8 @@ static void host_watch_task(void *arg)
 static void bt_start_from_nvs(void)
 {
     uint8_t host[6], pad[6];
-    if (!nvs_get_mac("bt_host", host) || !nvs_get_mac("bt_pad", pad)) {
-        ESP_LOGW(TAG, "bluetooth listener off: set host and pad with POST /bt");
+    if (!bringup_get_mac("bt_host", host) || !bringup_get_mac("bt_pad", pad)) {
+        ESP_LOGW(TAG, "bluetooth listener off: set the host adapter and controller in /setup");
         return;
     }
     bt_wake_mode_t mode = (bt_wake_mode_t)nvs_get_byte("bt_mode", BT_WAKE_REJECT);
@@ -299,7 +339,7 @@ static void bt_start_from_nvs(void)
     bt_wake_set_handover(ho == 0xFF ? -1 : ho, (bt_drop_t)nvs_get_byte("bt_ho_m", BT_DROP_RESET));
     bt_wake_set_scan_policy(pol);
     uint8_t key[16];
-    bool have_key = nvs_get_n("bt_lk", key, 16);
+    bool have_key = bringup_get_hex("bt_lk", key, 16);
     esp_err_t e = bt_wake_start(host, pad, have_key ? key : NULL, mode, on_press);
     memset(key, 0, sizeof(key));
     if (e != ESP_OK) {
@@ -358,37 +398,6 @@ static esp_err_t eth_start(void)
     return esp_eth_start(eth);
 }
 
-#if HAVE_WIFI
-static void on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
-{
-    if (id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (id == WIFI_EVENT_STA_CONNECTED) {
-        ESP_LOGI(TAG, "wifi associated");
-    } else if (id == WIFI_EVENT_STA_DISCONNECTED) {
-        const wifi_event_sta_disconnected_t *d = data;
-        ESP_LOGW(TAG, "wifi disconnected (reason %d), retrying", d->reason);
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        esp_wifi_connect();
-    }
-}
-
-static void wifi_start(void)
-{
-    esp_netif_create_default_wifi_sta();
-    wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&init));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_wifi_event, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_got_ip, NULL));
-    wifi_config_t cfg = { 0 };
-    strncpy((char *)cfg.sta.ssid, WIFI_SSID, sizeof(cfg.sta.ssid));
-    strncpy((char *)cfg.sta.password, WIFI_PASSWORD, sizeof(cfg.sta.password));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &cfg));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_LOGI(TAG, "wifi station started, ssid %s", WIFI_SSID);
-}
-#endif
 
 static esp_err_t status_get(httpd_req_t *req)
 {
@@ -399,26 +408,18 @@ static esp_err_t status_get(httpd_req_t *req)
     mac_str(s_target, m);
     snprintf(body, sizeof(body),
              "{\"app\":\"esp32-wol-via-bt\",\"version\":\"%s\",\"partition\":\"%s\","
-             "\"ip\":\"%s\",\"eth_link\":%s,\"wol_target\":\"%s\",\"uptime_s\":%lld,\"bt\":%s}\n",
+             "\"ip\":\"%s\",\"eth_link\":%s,\"wol_target\":\"%s\",\"uptime_s\":%lld,"
+             "\"setup\":\"%s\",\"bt\":%s}\n",
              ota_running_version(), ota_running_label(), s_ip, s_link_up ? "true" : "false",
-             mac_is_set(s_target) ? m : "unset", (long long)(esp_timer_get_time() / 1000000), bt);
+             mac_is_set(s_target) ? m : "unset", (long long)(esp_timer_get_time() / 1000000),
+             bringup_active() ? bringup_reason() : "", bt);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, body);
 }
 
 static bool req_auth_ok(httpd_req_t *req)
 {
-    char hdr[256];
-    size_t hl = httpd_req_get_hdr_value_len(req, "Authorization");
-    if (hl == 0 || hl >= sizeof(hdr) ||
-        httpd_req_get_hdr_value_str(req, "Authorization", hdr, sizeof(hdr)) != ESP_OK ||
-        !ota_basic_auth_ok(hdr, CONFIG_OTA_USER, CONFIG_OTA_PASSWORD)) {
-        httpd_resp_set_status(req, "401 Unauthorized");
-        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"wol\"");
-        httpd_resp_sendstr(req, "Unauthorized\n");
-        return false;
-    }
-    return true;
+    return bringup_auth(req); // admin:<admin_pass setting>; sends the 401 itself
 }
 
 // POST /bt with any subset of:
@@ -445,7 +446,7 @@ static esp_err_t bt_post(httpd_req_t *req)
     bool restart = false;
     uint8_t m[6];
     if (httpd_query_key_value(q, "pad", v, sizeof(v)) == ESP_OK) {
-        if (parse_mac(v, m) != 0 || nvs_set_val("bt_pad", m, 6) != ESP_OK) {
+        if (parse_mac(v, m) != 0 || bringup_set_mac("bt_pad", m) != ESP_OK) {
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad pad");
             return ESP_OK;
         }
@@ -457,8 +458,8 @@ static esp_err_t bt_post(httpd_req_t *req)
     }
     if (httpd_query_key_value(q, "host", v, sizeof(v)) == ESP_OK) {
         uint8_t old[6];
-        bool had = nvs_get_mac("bt_host", old);
-        if (parse_mac(v, m) != 0 || nvs_set_val("bt_host", m, 6) != ESP_OK) {
+        bool had = bringup_get_mac("bt_host", old);
+        if (parse_mac(v, m) != 0 || bringup_set_mac("bt_host", m) != ESP_OK) {
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad host");
             return ESP_OK;
         }
@@ -469,7 +470,7 @@ static esp_err_t bt_post(httpd_req_t *req)
     char kv[40];
     if (httpd_query_key_value(q, "lk", kv, sizeof(kv)) == ESP_OK) {
         uint8_t key[16];
-        if (parse_key(kv, key) != 0 || nvs_set_val("bt_lk", key, 16) != ESP_OK) {
+        if (parse_key(kv, key) != 0 || bringup_set_hex("bt_lk", key, 16) != ESP_OK) {
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "lk must be 32 hex digits");
             return ESP_OK;
         }
@@ -535,7 +536,7 @@ static esp_err_t bt_post(httpd_req_t *req)
         nvs_set_val("bt_scan", &sp, 1);
         bt_wake_set_scan_policy((bt_scan_policy_t)sp);
     }
-    if (restart && nvs_get_mac("bt_host", m) && nvs_get_mac("bt_pad", m)) {
+    if (restart && bringup_get_mac("bt_host", m) && bringup_get_mac("bt_pad", m)) {
         httpd_resp_sendstr(req, "saved, restarting to apply the bluetooth address\n");
         vTaskDelay(pdMS_TO_TICKS(500));
         esp_restart();
@@ -588,22 +589,26 @@ static void http_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 8192;
+    cfg.max_uri_handlers = 6 + BRINGUP_HTTP_HANDLERS + 2;
     httpd_handle_t server = NULL;
     ESP_ERROR_CHECK(httpd_start(&server, &cfg));
 
     static const httpd_uri_t status = { .uri = "/", .method = HTTP_GET, .handler = status_get };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &status));
 
-    if (CONFIG_OTA_PASSWORD[0] == '\0') {
-        ESP_LOGW(TAG, "CONFIG_OTA_PASSWORD is empty: POST /ota disabled, serial updates only");
+    ESP_ERROR_CHECK(bringup_register_http(server));
+    char admin[64];
+    if (!bringup_get_str(BRINGUP_KEY_ADMIN_PASS, admin, sizeof(admin))) {
+        ESP_LOGW(TAG, "no admin password yet: POST /ota, /wol and /bt disabled until /setup");
         return;
     }
-    ESP_ERROR_CHECK(ota_httpd_register(server, CONFIG_OTA_USER, CONFIG_OTA_PASSWORD));
+    ESP_ERROR_CHECK(ota_httpd_register(server, BRINGUP_ADMIN_USER, admin));
+    memset(admin, 0, sizeof(admin));
     static const httpd_uri_t wol = { .uri = "/wol", .method = HTTP_POST, .handler = wol_post };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &wol));
     static const httpd_uri_t bt = { .uri = "/bt", .method = HTTP_POST, .handler = bt_post };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &bt));
-    ESP_LOGI(TAG, "POST /ota and POST /wol enabled");
+    ESP_LOGI(TAG, "POST /ota, /wol and /bt enabled; settings at /setup");
 }
 
 // A freshly updated image is PENDING_VERIFY. It proves itself by getting an IP address
@@ -644,16 +649,15 @@ void app_main(void)
         nvs = nvs_flash_init();
     }
     ESP_ERROR_CHECK(nvs);
-    target_load();
     ESP_ERROR_CHECK(esp_netif_init());
     // Copies esp_log output into a RAM ring from here on; a host connects with
     // components/netserial/host/netserial.py <board-ip>.
     ESP_ERROR_CHECK(netserial_start(NULL));
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_got_ip, NULL));
+    ESP_ERROR_CHECK(bringup_init(&s_setup)); // decides bring-up mode, starts Wi-Fi
+    target_load();
     ESP_ERROR_CHECK(eth_start());
-#if HAVE_WIFI
-    wifi_start();
-#endif
     http_start();
     bt_start_from_nvs();
     xTaskCreate(host_watch_task, "host_watch", 3072, NULL, 4, NULL);

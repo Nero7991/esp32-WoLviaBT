@@ -79,6 +79,40 @@ BC-250 USB 5 V ---divider---> ESP32 GPIO (alive monitoring, one candidate)
 BC-250 <--Ethernet--> ESP32 (shutdown requests, ping)
 ```
 
+## Setting up a board (first boot or a new host)
+
+Settings live on the board and are edited at `http://<board>/setup`
+([esp-bringup](https://github.com/Nero7991/esp-bringup), a submodule in `components/esp-bringup`).
+
+| Setting | Where to get it |
+|---|---|
+| Wi-Fi network and password | the network the board should join |
+| Device name | optional |
+| Admin password | protects `/setup`, `/ota`, `/wol`, `/bt` (user `admin`), 8+ characters |
+| Host Bluetooth adapter | on the host: `bluetoothctl show` |
+| Controller address | on the host: `bluetoothctl devices Paired` (the DualSense) |
+| Controller link key | optional, accept-mode experiments only: `/var/lib/bluetooth/<adapter>/<pad>/info` |
+| Host wired MAC | the host's Ethernet MAC, the port cabled to this board |
+
+A board with any required setting empty starts in **setup mode**: it opens the WPA2 hotspot
+`WoLviaBT-XXXX` (password `wolviabt`). Join it with a phone; the setup page opens by itself (or go
+to `http://192.168.4.1/setup`). Fill in the settings and press Save and restart.
+
+To move a configured board to another host (new Wi-Fi, new DualSense), get it back into setup
+mode in one of these ways:
+
+- power-cycle it 3 times in a row, each time unplugging within 10 s of plugging in;
+- from the current network: `curl -u admin:<pw> -X POST 'http://<board>/api/setup/action?do=bringup'`;
+- if it cannot join its saved network, the hotspot comes up by itself after 5 failed attempts.
+
+In setup mode the board also keeps joining its saved network if it has one, so it stays reachable
+there. A Save with "restart" (or `?do=reboot`) leaves setup mode.
+
+On the host, enable Wake-on-LAN on the wired port permanently, e.g. with NetworkManager:
+`nmcli con add type ethernet ifname <if> con-name wol-link ipv4.method link-local
+ipv6.method link-local 802-3-ethernet.wake-on-lan magic` (the board checks whether the host is up
+by pinging `ff02::1` on that link, so it only needs the link up, no IPv4).
+
 ## Building and flashing
 
 Toolchain: ESP-IDF v5.5.6 at `~/esp/v5.5.6/esp-idf` (shared with quickvolt). That install is
@@ -102,12 +136,13 @@ python3 -I components/netserial/host/netserial.py <board-ip> --log run.log   # n
 curl http://<board-ip>/          # version, running slot, ip, uptime
 ```
 
-- `POST /ota` uses HTTP Basic auth, user `admin`. The password is in `sdkconfig.local`
-  (git-ignored, `CONFIG_OTA_PASSWORD`); without it the endpoint is not registered.
+- `POST /ota` uses HTTP Basic auth, user `admin`, with the admin password from `/setup`.
+  `CONFIG_OTA_PASSWORD` in the git-ignored `sdkconfig.local` only seeds it on a board that has
+  none.
 - A new image must get an IP address within 120 s or the bootloader rolls back to the previous
   slot. Tested 2026-11-25: a deliberately network-less image rolled back after about 2 min.
-- Wi-Fi station is compiled in only when the git-ignored `main/wifi_creds_local.h` exists (it maps
-  the quickvolt bench credentials, see the netserial example). Ethernet is always on.
+- Wi-Fi comes from the `/setup` settings. The git-ignored `main/wifi_creds_local.h`, if present,
+  only seeds them on a board that has none. Ethernet is always on.
 - `components/ota` is a copy of the OTA component from `esp32-s3-dw3110` (branch `anchor-survey`,
   last component change `cc42d07`). `components/netserial` is a git submodule; clone with
   `--recursive` or run `git submodule update --init`.
@@ -119,7 +154,7 @@ The magic packet is a raw Ethernet frame (broadcast, EtherType 0x0842) sent with
 while the target is off and cannot leave through Wi-Fi.
 
 ```
-curl -u admin:<pw> -X POST 'http://<board-ip>/wol?mac=aa:bb:cc:dd:ee:ff'   # store target in NVS
+curl -u admin:<pw> -X POST 'http://<board-ip>/wol?mac=aa:bb:cc:dd:ee:ff'   # same as the /setup field
 curl -u admin:<pw> -X POST  http://<board-ip>/wol                          # send magic packet
 ```
 
