@@ -6,3 +6,4 @@ dependencies.lock
 sdkconfig.local
 main/wifi_creds_local.h
 logs/
+__pycache__/

@@ -74,12 +74,59 @@ for 20 s (11347 reports) and 14 s (7581 reports) in two runs.
 | 4 | held 20 s, BC-250 Bluetooth powered on, board scan off, then `HCI_Reset` (link vanishes, no LMP detach) | pad light off within a few seconds; no reconnect to the BC-250 in 46 s |
 | 5 | held 14 s, BC-250 Bluetooth on, then `HCI_Reset` and at once `bluetoothctl connect` on the BC-250 | `Failed to connect: br-connection-create-socket`; bluetoothd: `connect to AC:36:1B:AD:7F:4B: Host is down (112)` at 12:18:49.29, i.e. page timeout |
 
+| E1 | accepted **without** role switch (pad stays central, no Role Change event), SDP and both HID channels open, held 751 ms, then `HCI_Reset` | no re-page in the following 60 s (board kept page scanning with the BC-250's Bluetooth off) |
+
 BlueZ's input plugin also pages the pad by itself after the adapter powers on and periodically
 afterwards (journal: `control_connect_cb() ... Host is down` at 12:16:25, 12:16:50, 12:17:50,
 12:18:43). None of these ever succeeded. **A DualSense that is not connected is not connectable:
 only the pad starts a connection, and only on a PS press. After losing its link (reject, accept
 timeout, supervision timeout or reset) it turns off.** A held link therefore cannot be passed to
 the host.
+
+## The pad's SDP record and what the HID profile says (2026-11-25)
+
+Dumped from the pad over its connection to the BC-250 with `tools/sdp_dump.py` (full output:
+`docs/captures/dualsense-edge-sdp.txt`). DS4 values for comparison are decoded from the raw SDP dump
+on psdevwiki (DS4-BT page).
+
+| Attribute | DualSense Edge (measured) | DS4 (psdevwiki) |
+|---|---|---|
+| 0x0204 HIDVirtualCable | TRUE | FALSE |
+| 0x0205 HIDReconnectInitiate | TRUE | TRUE |
+| 0x020A HIDRemoteWake | TRUE | TRUE |
+| 0x020C HIDSupervisionTimeout | 8000 slots (5 s) | 0x1F40 (5 s) |
+| 0x020D HIDNormallyConnectable | **FALSE** | **FALSE** |
+| PnP record | VID 0x054C, PID 0x0DF2, version 0x0100 | |
+
+Bluetooth HID Profile 1.1 (adopted spec):
+- NormallyConnectable FALSE: the device "may completely shut down its Bluetooth radio when there is
+  no active connection"; the host is the side that stays in page scan (5.3.4.14, 5.4.2).
+- Host-initiated reconnection "will generally only succeed to devices which expose
+  HIDNormallyConnectable TRUE" (section 3).
+- ReconnectInitiate: the device "shall not immediately reconnect if the connection is dropped at
+  the explicit request of the Bluetooth Host ... unless the device generates new data, for example
+  due to user activity" (5.3.4.6). After link loss either side may give up after about 30 s and
+  "manual user intervention is acceptable" (5.1.5).
+- BlueZ `profiles/input/device.c` maps (ReconnectInitiate TRUE, NormallyConnectable FALSE) to
+  device-initiated reconnect, which is why its own connect attempts only ever time out.
+
+So the measurements above are the documented behaviour, not a quirk: only the pad can open a
+connection. No report was found of anyone making a DS4 or DualSense reconnect, or move between two
+hosts, without a button press. Sony's 2025 multi-host pairing for the DualSense also needs PS plus a
+face button to switch.
+
+Vendor reports that touch pairing and power (controllers.fandom wiki, dualsensectl):
+- DualSense feature 0x0A writes the host BD_ADDR and link key; 0x09 reads the pad and host
+  addresses (DS4: 0x13 / 0x12). They choose which host the pad pages, not when.
+- Feature 0x08 "Bluetooth control": State 2 = OFF powers the pad down (`dualsensectl power-off`).
+  What State 1 = ON does is not documented. **Tested 2026-11-25 12:33, no effect:** sent to the
+  connected pad via hidraw (`tools/ds_bt_control.py`, 47 bytes, CRC32 seed 0x53); the pad stayed
+  connected; after `bluetoothctl disconnect` five host connects over 34 s all failed
+  (`br-connection-create-socket`, page timeout), same as without it.
+
+Custom firmware is not an option: no DualSense firmware dump or custom firmware has been published;
+for the DS4 only partial work exists (fail0verflow could not reach SWD; an unverified serial
+bootloader dump guide).
 
 ## Host-up detection (decides when the board must stop answering for the host's address)
 
@@ -94,7 +141,25 @@ BC-250 sysctl net.ipv6.icmp.echo_ignore_multicast=1:   host_up False (within 12 
 restored:                                    host_up True
 ```
 
+## Captures in this repo
+
+- `docs/captures/dualsense-edge-sdp.txt`: the pad's SDP records (HID and PnP), from
+  `tools/sdp_dump.py` run on the BC-250 while the pad was connected.
+- `docs/captures/dualsense-edge-reconnect-btmon.txt`: btmon decode of a normal reconnect to BlueZ,
+  link key redacted.
+
 ## Measurement traps hit
+
+- **A capture leaked the link key once.** btmon prints the Link Key Request Reply key in clear. A
+  first decode was shown in a session transcript before being shredded; the published capture
+  replaces that line and is checked for the key in every byte format. Re-pairing the pad rotates
+  the key.
+- **A "successful" host connect that was really the pad paging.** At 12:31:07 `bluetoothctl
+  connect` reported success; btmon showed the host's own Create Connection had hit Page Timeout at
+  12:31:06.516 and the pad's Connection Request arrived 26 ms later from a PS press. Always check
+  in btmon who initiated (Create Connection vs Connect Request).
+- **hidraw lookup by HID_UNIQ ran before the pad's hidraw node existed**, so the first two 0x08
+  attempts sent nothing. Wait for `/dev/hidrawN` after connect.
 
 - **IPv4 gateway ping as the host check was wrong.** The bench BC-250's `enp4s0` address
   (192.168.60.1) and its dnsmasq were started by hand in another session and did not survive the

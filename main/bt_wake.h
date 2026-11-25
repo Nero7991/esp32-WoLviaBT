@@ -27,6 +27,7 @@ typedef enum {
     BT_DROP_DETACH = 0, // HCI_Disconnect, reason 0x13 (remote user terminated)
     BT_DROP_RESET = 1,  // HCI_Reset: the link vanishes without an LMP detach
     BT_DROP_RADIO = 2,  // esp_bt_controller_disable: radio off until re-enabled
+    BT_DROP_L2CAP = 3,  // close the HID interrupt and control channels, keep the ACL link
 } bt_drop_t;
 
 typedef void (*bt_wake_press_cb_t)(void);
@@ -48,6 +49,12 @@ void bt_wake_set_handover(int delay_s, bt_drop_t method);
 
 // Let go of a held pad now. BT_DROP_RADIO leaves the radio off; bt_wake_radio_on restores it.
 esp_err_t bt_wake_drop(bt_drop_t method);
+// BT_DROP_DETACH with an explicit HCI_Disconnect reason (0x05, 0x13, 0x14, 0x15, 0x1A, 0x29, 0x3B).
+esp_err_t bt_wake_detach(uint8_t reason);
+
+// Role requested when accepting the pad: true = become central (role switch, as BlueZ does),
+// false = stay peripheral so the pad remains central.
+void bt_wake_set_accept_central(bool central);
 esp_err_t bt_wake_radio_on(void);
 
 // Feed the host state (from the Ethernet ping check). A true -> false edge starts the

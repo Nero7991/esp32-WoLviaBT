@@ -427,7 +427,8 @@ static bool req_auth_ok(httpd_req_t *req)
 //   scan=auto|on|off           page scan policy
 //   lk=<32 hex>                link key for the pad, as in BlueZ's info file (never echoed)
 //   handover=<s>|off  method=detach|reset|radio   automatic drop after the host comes up
-//   drop=detach|reset|radio    let go of a held pad now;  radio=on  re-enable after drop=radio
+//   drop=detach[&reason=hex]|reset|radio|l2cap   let go of a held pad now (radio=on re-enables)
+//   role=central|peripheral    role requested when accepting (not stored)
 // Everything except drop and radio is stored in NVS.
 static esp_err_t bt_post(httpd_req_t *req)
 {
@@ -493,10 +494,20 @@ static esp_err_t bt_post(httpd_req_t *req)
         uint8_t ho = nvs_get_byte("bt_ho_s", 0xFF);
         bt_wake_set_handover(ho == 0xFF ? -1 : ho, (bt_drop_t)nvs_get_byte("bt_ho_m", BT_DROP_RESET));
     }
+    if (httpd_query_key_value(q, "role", v, sizeof(v)) == ESP_OK && s_bt_running) {
+        bt_wake_set_accept_central(strcmp(v, "peripheral") != 0);
+    }
     if (httpd_query_key_value(q, "drop", v, sizeof(v)) == ESP_OK && s_bt_running) {
-        bt_drop_t mt = strcmp(v, "detach") == 0 ? BT_DROP_DETACH
-                     : strcmp(v, "radio") == 0  ? BT_DROP_RADIO : BT_DROP_RESET;
-        esp_err_t e = bt_wake_drop(mt);
+        char rs[8];
+        esp_err_t e;
+        if (strcmp(v, "detach") == 0 && httpd_query_key_value(q, "reason", rs, sizeof(rs)) == ESP_OK) {
+            e = bt_wake_detach((uint8_t)strtoul(rs, NULL, 16));
+        } else {
+            bt_drop_t mt = strcmp(v, "detach") == 0 ? BT_DROP_DETACH
+                         : strcmp(v, "radio") == 0  ? BT_DROP_RADIO
+                         : strcmp(v, "l2cap") == 0  ? BT_DROP_L2CAP : BT_DROP_RESET;
+            e = bt_wake_drop(mt);
+        }
         return httpd_resp_sendstr(req, e == ESP_OK ? "dropped\n" : "drop failed\n");
     }
     if (httpd_query_key_value(q, "radio", v, sizeof(v)) == ESP_OK && s_bt_running) {

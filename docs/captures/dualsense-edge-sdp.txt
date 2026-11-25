@@ -1,0 +1,36 @@
+--- record uuid:1124
+  0x0000 ServiceRecordHandle      65537
+  0x0001 ServiceClassIDList       ['uuid:1124']
+  0x0004 ProtocolDescriptorList   [['uuid:0100', 17], ['uuid:0011']]
+  0x0006 LanguageBaseAttributeIDList [25966, 106, 256]
+  0x0009 BluetoothProfileDescriptorList [['uuid:1124', 256]]
+  0x000D AdditionalProtocolDescriptorLists [[['uuid:0100', 19], ['uuid:0011']]]
+  0x0100 ServiceName              DualSense Edge Wireless Controller
+  0x0101 ServiceDescription       Game Controller
+  0x0102 ProviderName             Sony Interactive Entertainment
+  0x0200 HIDDeviceReleaseNumber   256
+  0x0201 HIDParserVersion         273
+  0x0202 HIDDeviceSubclass        8
+  0x0203 HIDCountryCode           0
+  0x0204 HIDVirtualCable          True
+  0x0205 HIDReconnectInitiate     True
+  0x0206 HIDDescriptorList        <HID report descriptor, 428 bytes>
+  0x0207 HIDLANGIDBaseList        [[1033, 256]]
+  0x0208 HIDSDPDisable            False
+  0x0209 HIDBatteryPower          True
+  0x020A HIDRemoteWake            True
+  0x020B HIDProfileVersion        256
+  0x020C HIDSupervisionTimeout    8000
+  0x020D HIDNormallyConnectable   False
+  0x020E HIDBootDevice            False
+--- record uuid:1200
+  0x0000 ServiceRecordHandle      65538
+  0x0001 ServiceClassIDList       ['uuid:1200']
+  0x0004 ProtocolDescriptorList   [['uuid:0100', 1], ['uuid:0001']]
+  0x0009 BluetoothProfileDescriptorList [['uuid:1200', 259]]
+  0x0200 SpecificationID          0x0103
+  0x0201 VendorID                 0x054C
+  0x0202 ProductID                0x0DF2
+  0x0203 Version                  0x0100
+  0x0204 PrimaryRecord            0x0001
+  0x0205 VendorIDSource           0x0002

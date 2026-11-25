@@ -1,0 +1,2104 @@
+# DualSense Edge reconnecting to a Linux host (BlueZ), btmon decode
+#
+# Captured 2026-11-25 on the host side with `btmon -w`, decoded with `btmon -r -T`.
+# Host: BC-250 running CachyOS (kernel 6.18.48), BlueZ, Realtek USB adapter 00:E0:4C:23:99:87.
+# Pad:  DualSense Edge AC:36:1B:AD:7F:4B, hw_version 0x01000216, fw_version 0x01000078,
+#       previously paired with this host. The pad was off; PS was pressed once.
+# Window: from the pad's Connection Request (12:31:06.542) for 0.76 s, through SDP,
+#       authentication, encryption and the HID L2CAP channels.
+# Redaction: the 16-byte link key in the Link Key Request Reply is replaced by <redacted>.
+#       Nothing else was changed. Checked: no other copy of the key, in any byte format.
+#
+# Points of interest (see docs/dualsense-bt-behaviour.md in this repo):
+# - The pad pages the host; the host accepts with a role switch to central.
+# - The pad opens SDP (PSM 1) BEFORE authenticating, sends one ServiceSearchAttributeRequest
+#   (UUID L2CAP 0x0100, attributes 0x0000-0xFFFF), then closes SDP.
+# - Only then does the pad request the link key; encryption follows (E0, key size 16).
+# - HID control (PSM 0x11) then HID interrupt (PSM 0x13) are opened by the pad.
+#
+> HCI Event: Connect... (0x04) plen 10  #3612 [hci0] 2026-11-25 12:31:06.542154
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Class: 0x002508
+          Major class: Peripheral (mouse, joystick, keyboards)
+          Minor class: 0x02
+          Limited Discoverable Mode
+        Link type: ACL (0x01)
+< HCI Command:... (0x01|0x0009) plen 7  #3613 [hci0] 2026-11-25 12:31:06.542234
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Role: Central (0x00)
+> HCI Event: Command S.. (0x0f) plen 4  #3614 [hci0] 2026-11-25 12:31:06.544071
+      Accept Connection Request (0x01|0x0009) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Role Change (0x12) plen 8  #3615 [hci0] 2026-11-25 12:31:06.699058
+        Status: Success (0x00)
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Role: Central (0x00)
+> HCI Event: Connect... (0x03) plen 11  #3616 [hci0] 2026-11-25 12:31:06.715129
+        Status: Success (0x00)
+        Handle: 2
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Link type: ACL (0x01)
+        Encryption: Disabled (0x00)
+< HCI Command:... (0x01|0x001b) plen 2  #3617 [hci0] 2026-11-25 12:31:06.715515
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+@ RAW Open: bt.. (privileged) version 2.22  {0x0002} 2026-11-25 12:31:06.715652
+@ RAW Close: btmon                          {0x0002} 2026-11-25 12:31:06.715666
+> HCI Event: Command S.. (0x0f) plen 4  #3618 [hci0] 2026-11-25 12:31:06.725057
+      Read Remote Supported Features (0x01|0x001b) ncmd 2
+        Status: Success (0x00)
+< HCI Command:... (0x03|0x001a) plen 1  #3619 [hci0] 2026-11-25 12:31:06.725174
+        Scan enable: No Scans (0x00)
+> HCI Event: Max Slots.. (0x1b) plen 3  #3620 [hci0] 2026-11-25 12:31:06.727053
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Max slots: 5
+> HCI Event: Command C.. (0x0e) plen 4  #3621 [hci0] 2026-11-25 12:31:06.729053
+      Write Scan Enable (0x03|0x001a) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Read Rem.. (0x0b) plen 11  #3622 [hci0] 2026-11-25 12:31:06.732054
+        Status: Success (0x00)
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Features[0/0][8]:
+        bf 3a 8d fe db ff 7b 87                          .:....{.        
+          3 slot packets
+          5 slot packets
+          Encryption
+          Slot offset
+          Timing accuracy
+          Role switch
+          Sniff mode
+          Power control requests
+          SCO link
+          HV2 packets
+          HV3 packets
+          CVSD synchronous data
+          Power control
+          Transparent synchronous data
+          Broadcast Encryption
+          Enhanced Data Rate ACL 2 Mbps mode
+          Enhanced Data Rate ACL 3 Mbps mode
+          Enhanced inquiry scan
+          Interlaced inquiry scan
+          Interlaced page scan
+          RSSI with inquiry results
+          Extended SCO link (EV3 packets)
+          EV4 packets
+          EV5 packets
+          AFH capable peripheral
+          AFH classification peripheral
+          LE Supported (Controller)
+          3-slot Enhanced Data Rate ACL packets
+          5-slot Enhanced Data Rate ACL packets
+          Sniff subrating
+          Pause encryption
+          AFH capable central
+          AFH classification central
+          Enhanced Data Rate eSCO 2 Mbps mode
+          Enhanced Data Rate eSCO 3 Mbps mode
+          3-slot Enhanced Data Rate eSCO packets
+          Extended Inquiry Response
+          Simultaneous LE and BR/EDR (Controller)
+          Secure Simple Pairing
+          Encapsulated PDU
+          Erroneous Data Reporting
+          Non-flushable Packet Boundary Flag
+          Link Supervision Timeout Changed Event
+          Inquiry TX Power Level
+          Enhanced Power Control
+          Extended features
+< HCI Command:... (0x01|0x001c) plen 3  #3623 [hci0] 2026-11-25 12:31:06.732176
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Page: 1
+> HCI Event: Command S.. (0x0f) plen 4  #3624 [hci0] 2026-11-25 12:31:06.733052
+      Read Remote Extended Features (0x01|0x001c) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Read Rem.. (0x23) plen 13  #3625 [hci0] 2026-11-25 12:31:06.737054
+        Status: Success (0x00)
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Page: 1/2
+        Features[1/0][8]:
+        01 00 00 00 00 00 00 00                          ........        
+          Secure Simple Pairing (Host Support)
+< HCI Command:.. (0x01|0x0019) plen 10  #3626 [hci0] 2026-11-25 12:31:06.737193
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Page scan repetition mode: R2 (0x02)
+        Page scan mode: Mandatory (0x00)
+        Clock offset: 0x0000
+< BR-ACL: Handle... flags 0x00 dlen 10  #3627 [hci0] 2026-11-25 12:31:06.737212
+      L2CAP: Information Request (0x0a) ident 1 len 2
+        Type: Extended features supported (0x0002)
+> HCI Event: Command S.. (0x0f) plen 4  #3628 [hci0] 2026-11-25 12:31:06.739049
+      Remote Name Request (0x01|0x0019) ncmd 2
+        Status: Success (0x00)
+> HCI Event: Number of.. (0x13) plen 5  #3629 [hci0] 2026-11-25 12:31:06.742040
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3627: len 10 (20 Kb/s)
+        Latency: 4 msec (4-4 msec ~4 msec)
+> BR-ACL: Handle... flags 0x02 dlen 12  #3630 [hci0] 2026-11-25 12:31:06.750383
+      L2CAP: Connection Request (0x02) ident 1 len 4
+        PSM: 1 (0x0001)
+        Source CID: 64
+> BR-ACL: Handle... flags 0x02 dlen 16  #3631 [hci0] 2026-11-25 12:31:06.750389
+      L2CAP: Information Response (0x0b) ident 1 len 8
+        Type: Extended features supported (0x0002)
+        Result: Success (0x0000)
+        Features: 0x00000000
+< BR-ACL: Handle... flags 0x00 dlen 16  #3632 [hci0] 2026-11-25 12:31:06.750534
+      L2CAP: Connection Response (0x03) ident 1 len 8
+        Destination CID: 64
+        Source CID: 64
+        Result: Connection pending (0x0001)
+        Status: No further information available (0x0000)
+< BR-ACL: Handle... flags 0x00 dlen 10  #3633 [hci0] 2026-11-25 12:31:06.750546
+      L2CAP: Information Request (0x0a) ident 2 len 2
+        Type: Extended features supported (0x0002)
+> BR-ACL: Handle... flags 0x02 dlen 16  #3634 [hci0] 2026-11-25 12:31:06.764362
+      L2CAP: Information Response (0x0b) ident 2 len 8
+        Type: Extended features supported (0x0002)
+        Result: Success (0x0000)
+        Features: 0x00000000
+< BR-ACL: Handle... flags 0x00 dlen 16  #3635 [hci0] 2026-11-25 12:31:06.764490
+      L2CAP: Connection Response (0x03) ident 1 len 8
+        Destination CID: 64
+        Source CID: 64
+        Result: Connection successful (0x0000)
+        Status: No further information available (0x0000)
+< BR-ACL: Handle... flags 0x00 dlen 12  #3636 [hci0] 2026-11-25 12:31:06.764503
+      L2CAP: Configure Request (0x04) ident 3 len 4
+        Destination CID: 64
+        Flags: 0x0000
+> HCI Event: Remote... (0x07) plen 255  #3637 [hci0] 2026-11-25 12:31:06.769118
+        Status: Success (0x00)
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Name: DualSense Edge Wireless Controller
+@ MGMT Event: De.. (0x000b) plen 54  {0x0001} [hci0] 2026-11-25 12:31:06.769231
+        BR/EDR Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Flags: 0x00000000
+        Data length: 41
+        Data[41]:
+        23 09 44 75 61 6c 53 65 6e 73 65 20 45 64 67 65  #.DualSense Edge
+        20 57 69 72 65 6c 65 73 73 20 43 6f 6e 74 72 6f   Wireless Contro
+        6c 6c 65 72 04 0d 08 25 00                       ller...%.       
+        Name (complete): DualSense Edge Wireless Controller
+        Class: 0x002508
+          Major class: Peripheral (mouse, joystick, keyboards)
+          Minor class: 0x02
+          Limited Discoverable Mode
+> HCI Event: Number of.. (0x13) plen 5  #3638 [hci0] 2026-11-25 12:31:06.770053
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3632: len 16 (6 Kb/s)
+        Latency: 19 msec (4-19 msec ~12 msec)
+> HCI Event: Number of.. (0x13) plen 5  #3639 [hci0] 2026-11-25 12:31:06.771049
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3633: len 10 (4 Kb/s)
+        Latency: 20 msec (4-20 msec ~16 msec)
+> HCI Event: Number of.. (0x13) plen 5  #3640 [hci0] 2026-11-25 12:31:06.775042
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3635: len 16 (12 Kb/s)
+        Latency: 10 msec (4-20 msec ~13 msec)
+> HCI Event: Number of.. (0x13) plen 5  #3641 [hci0] 2026-11-25 12:31:06.776909
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3636: len 12 (8 Kb/s)
+        Latency: 12 msec (4-20 msec ~12 msec)
+> BR-ACL: Handle... flags 0x02 dlen 16  #3642 [hci0] 2026-11-25 12:31:06.785368
+      L2CAP: Configure Request (0x04) ident 2 len 8
+        Destination CID: 64
+        Flags: 0x0000
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+> BR-ACL: Handle... flags 0x02 dlen 18  #3643 [hci0] 2026-11-25 12:31:06.785373
+      L2CAP: Configure Response (0x05) ident 3 len 10
+        Source CID: 64
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+< BR-ACL: Handle... flags 0x00 dlen 18  #3644 [hci0] 2026-11-25 12:31:06.785461
+      L2CAP: Configure Response (0x05) ident 2 len 10
+        Source CID: 64
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+> HCI Event: Number of.. (0x13) plen 5  #3645 [hci0] 2026-11-25 12:31:06.798067
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3644: len 18 (12 Kb/s)
+        Latency: 12 msec (4-20 msec ~12 msec)
+> BR-ACL: Handle... flags 0x02 dlen 24  #3646 [hci0] 2026-11-25 12:31:06.807397
+      Channel: 64 len 20 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Request (0x06) tid 1 len 15
+        Search pattern: [len 5]
+          Sequence (6) with 3 bytes [8 extra bits] len 5
+            UUID (3) with 2 bytes [0 extra bits] len 3
+              L2CAP (0x0100)
+        Max record count: 2048
+        Attribute list: [len 7]
+          Sequence (6) with 5 bytes [8 extra bits] len 7
+            Unsigned Integer (1) with 4 bytes [0 extra bits] len 5
+              0x0000ffff
+        Continuation state: 0
+< BR-ACL: Handle.. flags 0x00 dlen 676  #3647 [hci0] 2026-11-25 12:31:06.807811
+      Channel: 64 len 672 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Response (0x07) tid 1 len 667
+        Attribute bytes: 656
+        Continuation state: 8
+        5a 1b 07 6b 90 02 00 00                          Z..k....        
+> HCI Event: Number of.. (0x13) plen 5  #3648 [hci0] 2026-11-25 12:31:06.820045
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3647: len 676 (450 Kb/s)
+        Latency: 12 msec (4-20 msec ~12 msec)
+        Channel: 64 [PSM 1 mode Basic (0x00)] {chan 0}
+        Channel Latency: 12 msec (12-12 msec ~12 msec)
+> BR-ACL: Handle... flags 0x02 dlen 32  #3649 [hci0] 2026-11-25 12:31:06.844368
+      Channel: 64 len 28 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Request (0x06) tid 2 len 23
+        Search pattern: [len 5]
+          Sequence (6) with 3 bytes [8 extra bits] len 5
+            UUID (3) with 2 bytes [0 extra bits] len 3
+              L2CAP (0x0100)
+        Max record count: 2048
+        Attribute list: [len 7]
+          Sequence (6) with 5 bytes [8 extra bits] len 7
+            Unsigned Integer (1) with 4 bytes [0 extra bits] len 5
+              0x0000ffff
+        Continuation state: 8
+        5a 1b 07 6b 90 02 00 00                          Z..k....        
+< BR-ACL: Handle.. flags 0x00 dlen 676  #3650 [hci0] 2026-11-25 12:31:06.844551
+      Channel: 64 len 672 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Response (0x07) tid 2 len 667
+        Attribute bytes: 656
+        Continuation state: 8
+        5a 1b 07 6b 20 05 00 00                          Z..k ...        
+> HCI Event: Number of.. (0x13) plen 5  #3651 [hci0] 2026-11-25 12:31:06.858034
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3650: len 676 (416 Kb/s)
+        Latency: 13 msec (4-20 msec ~12 msec)
+        Channel: 64 [PSM 1 mode Basic (0x00)] {chan 0}
+        Channel Latency: 13 msec (12-13 msec ~12 msec)
+> BR-ACL: Handle... flags 0x02 dlen 32  #3652 [hci0] 2026-11-25 12:31:06.883352
+      Channel: 64 len 28 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Request (0x06) tid 3 len 23
+        Search pattern: [len 5]
+          Sequence (6) with 3 bytes [8 extra bits] len 5
+            UUID (3) with 2 bytes [0 extra bits] len 3
+              L2CAP (0x0100)
+        Max record count: 2048
+        Attribute list: [len 7]
+          Sequence (6) with 5 bytes [8 extra bits] len 7
+            Unsigned Integer (1) with 4 bytes [0 extra bits] len 5
+              0x0000ffff
+        Continuation state: 8
+        5a 1b 07 6b 20 05 00 00                          Z..k ...        
+< BR-ACL: Handle.. flags 0x00 dlen 393  #3653 [hci0] 2026-11-25 12:31:06.883538
+      Channel: 64 len 389 [PSM 1 mode Basic (0x00)] {chan 0}
+      SDP: Service Search Attribute Response (0x07) tid 3 len 384
+        Attribute bytes: 381
+        Continuation state: 0
+        Combined attribute bytes: 1693
+          Attribute list: [len 163] {position 0}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010001
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Access Profile (0x1800)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0001
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0005
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Documentation URL (0x000a) [len 2]
+              http://www.bluez.org/ [len 21]
+            Attribute: Client Executable URL (0x000b) [len 2]
+              http://www.bluez.org/ [len 21]
+            Attribute: Icon URL (0x000c) [len 2]
+              http://www.bluez.org/ [len 21]
+            Attribute: Unknown (0x0100) [len 2]
+              Generic Access Profile [len 22]
+            Attribute: Unknown (0x0102) [len 2]
+              BlueZ [len 5]
+          Attribute list: [len 88] {position 1}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010002
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Attribute Profile (0x1801)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0006
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x000f
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Unknown (0x0100) [len 2]
+              Generic Attribute Profile [len 25]
+            Attribute: Unknown (0x0102) [len 2]
+              BlueZ [len 5]
+          Attribute list: [len 81] {position 2}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010003
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Device Information (0x180a)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0010
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0012
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Unknown (0x0100) [len 2]
+              Device Information [len 18]
+            Attribute: Unknown (0x0102) [len 2]
+              BlueZ [len 5]
+          Attribute list: [len 103] {position 3}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010004
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                A/V Remote Control (0x110e)
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                A/V Remote Control Controller (0x110f)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0017
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  AVCTP (0x0017)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0104
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  A/V Remote Control (0x110e)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0106
+            Attribute: Additional Protocol Descriptor List (0x000d) [len 2]
+              Sequence (6) with 16 bytes [8 extra bits] len 18
+                Sequence (6) with 6 bytes [8 extra bits] len 8
+                  UUID (3) with 2 bytes [0 extra bits] len 3
+                    L2CAP (0x0100)
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x001b
+                Sequence (6) with 6 bytes [8 extra bits] len 8
+                  UUID (3) with 2 bytes [0 extra bits] len 3
+                    AVCTP (0x0017)
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x0104
+            Attribute: Unknown (0x0100) [len 2]
+              AVRCP CT [len 8]
+            Attribute: Unknown (0x0311) [len 2]
+              0x03cf
+          Attribute list: [len 100] {position 4}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010005
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                A/V Remote Control Target (0x110c)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0017
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  AVCTP (0x0017)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0104
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  A/V Remote Control (0x110e)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0106
+            Attribute: Additional Protocol Descriptor List (0x000d) [len 2]
+              Sequence (6) with 16 bytes [8 extra bits] len 18
+                Sequence (6) with 6 bytes [8 extra bits] len 8
+                  UUID (3) with 2 bytes [0 extra bits] len 3
+                    L2CAP (0x0100)
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x001b
+                Sequence (6) with 6 bytes [8 extra bits] len 8
+                  UUID (3) with 2 bytes [0 extra bits] len 3
+                    AVCTP (0x0017)
+                  Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                    0x0104
+            Attribute: Unknown (0x0100) [len 2]
+              AVRCP TG [len 8]
+            Attribute: Unknown (0x0311) [len 2]
+              0x005f
+          Attribute list: [len 97] {position 5}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010006
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Handsfree Audio Gateway (0x111f)
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Audio (0x1203)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x0d
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Handsfree (0x111e)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0109
+            Attribute: Unknown (0x0100) [len 2]
+              Hands-Free Voice gateway [len 24]
+            Attribute: Unknown (0x0301) [len 2]
+              0x01
+            Attribute: Unknown (0x0311) [len 2]
+              0x0120
+          Attribute list: [len 83] {position 6}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010007
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Handsfree (0x111e)
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Generic Audio (0x1203)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x07
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Handsfree (0x111e)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0109
+            Attribute: Unknown (0x0100) [len 2]
+              Hands-Free unit [len 15]
+            Attribute: Unknown (0x0311) [len 2]
+              0x0120
+          Attribute list: [len 81] {position 7}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010008
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Audio Source (0x110a)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0019
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  AVDTP (0x0019)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0103
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Advanced Audio Distribution (0x110d)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0104
+            Attribute: Unknown (0x0100) [len 2]
+              Audio Source [len 12]
+            Attribute: Unknown (0x0311) [len 2]
+              0x000f
+          Attribute list: [len 79] {position 8}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010009
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Audio Sink (0x110b)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0019
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  AVDTP (0x0019)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0103
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Advanced Audio Distribution (0x110d)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0104
+            Attribute: Unknown (0x0100) [len 2]
+              Audio Sink [len 10]
+            Attribute: Unknown (0x0311) [len 2]
+              0x000f
+          Attribute list: [len 92] {position 9}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000a
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 16 bytes [0 extra bits] len 17
+                03b80e5a-ede8-4b33-a751-6ce34ec4c700
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x001f
+              Sequence (6) with 9 bytes [8 extra bits] len 11
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  ATT (0x0007)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0013
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0017
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Unknown (0x0100) [len 2]
+              Vendor specific [len 15]
+            Attribute: Unknown (0x0102) [len 2]
+              BlueZ [len 5]
+          Attribute list: [len 98] {position 10}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000b
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Message Notification Server (0x1133)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x11
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Message Access Profile (0x1134)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0104
+            Attribute: Unknown (0x0100) [len 2]
+              Message Notification [len 20]
+            Attribute: Unknown (0x0200) [len 2]
+              0x1001
+            Attribute: Unknown (0x0317) [len 2]
+              0x0000027f
+          Attribute list: [len 102] {position 11}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000c
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Message Access Server (0x1132)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x10
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Message Access Profile (0x1134)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0100
+            Attribute: Unknown (0x0100) [len 2]
+              Message Access [len 14]
+            Attribute: Unknown (0x0200) [len 2]
+              0x1003
+            Attribute: Unknown (0x0315) [len 2]
+              0x00
+            Attribute: Unknown (0x0316) [len 2]
+              0x0f
+            Attribute: Unknown (0x0317) [len 2]
+              0x0000007f
+          Attribute list: [len 100] {position 12}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000d
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Phonebook Access Server (0x112f)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x0f
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  Phonebook Access (0x1130)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0101
+            Attribute: Unknown (0x0100) [len 2]
+              Phone Book Access [len 17]
+            Attribute: Unknown (0x0200) [len 2]
+              0x1005
+            Attribute: Unknown (0x0314) [len 2]
+              0x01
+            Attribute: Unknown (0x0317) [len 2]
+              0x00000003
+          Attribute list: [len 86] {position 13}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000e
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                IrMC Sync (0x1104)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x0e
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  IrMC Sync (0x1104)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0100
+            Attribute: Unknown (0x0100) [len 2]
+              Synchronization [len 15]
+            Attribute: Unknown (0x0301) [len 2]
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x01
+          Attribute list: [len 83] {position 14}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x0001000f
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                OBEX File Transfer (0x1106)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x0a
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX File Transfer (0x1106)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0103
+            Attribute: Unknown (0x0100) [len 2]
+              File Transfer [len 13]
+            Attribute: Unknown (0x0200) [len 2]
+              0x1007
+          Attribute list: [len 100] {position 15}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010010
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                OBEX Object Push (0x1105)
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x09
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 6 bytes [8 extra bits] len 8
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX Object Push (0x1105)
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0102
+            Attribute: Unknown (0x0100) [len 2]
+              Object Push [len 11]
+            Attribute: Unknown (0x0200) [len 2]
+              0x1009
+            Attribute: Unknown (0x0303) [len 2]
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x01
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x02
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x03
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x04
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x05
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0x06
+              Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                0xff
+          Attribute list: [len 120] {position 16}
+            Attribute: Service Record Handle (0x0000) [len 2]
+              0x00010011
+            Attribute: Service Class ID List (0x0001) [len 2]
+              UUID (3) with 16 bytes [0 extra bits] len 17
+                00005005-0000-1000-8000-0002ee000001
+            Attribute: Protocol Descriptor List (0x0004) [len 2]
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  L2CAP (0x0100)
+              Sequence (6) with 5 bytes [8 extra bits] len 7
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  RFCOMM (0x0003)
+                Unsigned Integer (1) with 1 byte [0 extra bits] len 2
+                  0x18
+              Sequence (6) with 3 bytes [8 extra bits] len 5
+                UUID (3) with 2 bytes [0 extra bits] len 3
+                  OBEX (0x0008)
+            Attribute: Browse Group List (0x0005) [len 2]
+              UUID (3) with 2 bytes [0 extra bits] len 3
+                Public Browse Root (0x1002)
+            Attribute: Bluetooth Profile Descriptor List (0x0009) [len 2]
+              Sequence (6) with 20 bytes [8 extra bits] len 22
+                UUID (3) with 16 bytes [0 extra bits] len 17
+                  00005005-0000-1000-8000-0002ee000001
+                Unsigned Integer (1) with 2 bytes [0 extra bits] len 3
+                  0x0100
+            Attribute: Unknown (0x0100) [len 2]
+              Nokia OBEX PC Suite Services [len 28]
+> HCI Event: Number of.. (0x13) plen 5  #3654 [hci0] 2026-11-25 12:31:06.894015
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3653: len 393 (314 Kb/s)
+        Latency: 10 msec (4-20 msec ~11 msec)
+        Channel: 64 [PSM 1 mode Basic (0x00)] {chan 0}
+        Channel Latency: 10 msec (10-13 msec ~11 msec)
+> BR-ACL: Handle... flags 0x02 dlen 12  #3655 [hci0] 2026-11-25 12:31:06.918359
+      L2CAP: Disconnection Request (0x06) ident 3 len 4
+        Destination CID: 64
+        Source CID: 64
+< BR-ACL: Handle... flags 0x00 dlen 12  #3656 [hci0] 2026-11-25 12:31:06.918447
+      L2CAP: Disconnection Response (0x07) ident 3 len 4
+        Destination CID: 64
+        Source CID: 64
+> HCI Event: Number of.. (0x13) plen 5  #3657 [hci0] 2026-11-25 12:31:06.930089
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3656: len 12 (8 Kb/s)
+        Latency: 11 msec (4-20 msec ~11 msec)
+> HCI Event: Link Key... (0x17) plen 6  #3658 [hci0] 2026-11-25 12:31:06.947089
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+< HCI Command:.. (0x01|0x000b) plen 22  #3659 [hci0] 2026-11-25 12:31:06.947205
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Link key[16]:
+        <redacted>
+> HCI Event: Command... (0x0e) plen 10  #3660 [hci0] 2026-11-25 12:31:06.954030
+      Link Key Request Reply (0x01|0x000b) ncmd 2
+        Status: Success (0x00)
+        Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+> HCI Event: Encryptio.. (0x08) plen 4  #3661 [hci0] 2026-11-25 12:31:06.993078
+        Status: Success (0x00)
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Encryption: Enabled with E0 (0x01)
+< HCI Command:... (0x05|0x0008) plen 2  #3662 [hci0] 2026-11-25 12:31:06.993189
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+> HCI Event: Command C.. (0x0e) plen 7  #3663 [hci0] 2026-11-25 12:31:06.996064
+      Read Encryption Key Size (0x05|0x0008) ncmd 2
+        Status: Success (0x00)
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Key size: 16
+> BR-ACL: Handle... flags 0x02 dlen 12  #3664 [hci0] 2026-11-25 12:31:07.003357
+      L2CAP: Connection Request (0x02) ident 4 len 4
+        PSM: 17 (0x0011)
+        Source CID: 65
+< BR-ACL: Handle... flags 0x00 dlen 16  #3665 [hci0] 2026-11-25 12:31:07.003468
+      L2CAP: Connection Response (0x03) ident 4 len 8
+        Destination CID: 64
+        Source CID: 65
+        Result: Connection successful (0x0000)
+        Status: No further information available (0x0000)
+< BR-ACL: Handle... flags 0x00 dlen 12  #3666 [hci0] 2026-11-25 12:31:07.003482
+      L2CAP: Configure Request (0x04) ident 4 len 4
+        Destination CID: 65
+        Flags: 0x0000
+> HCI Event: Number of.. (0x13) plen 5  #3667 [hci0] 2026-11-25 12:31:07.016059
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3665: len 16 (10 Kb/s)
+        Latency: 12 msec (4-20 msec ~12 msec)
+> HCI Event: Number of.. (0x13) plen 5  #3668 [hci0] 2026-11-25 12:31:07.017005
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3666: len 12 (7 Kb/s)
+        Latency: 13 msec (4-20 msec ~12 msec)
+> BR-ACL: Handle... flags 0x02 dlen 16  #3669 [hci0] 2026-11-25 12:31:07.023357
+      L2CAP: Configure Request (0x04) ident 5 len 8
+        Destination CID: 64
+        Flags: 0x0000
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+> BR-ACL: Handle... flags 0x02 dlen 18  #3670 [hci0] 2026-11-25 12:31:07.023360
+      L2CAP: Configure Response (0x05) ident 4 len 10
+        Source CID: 64
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+< BR-ACL: Handle... flags 0x00 dlen 18  #3671 [hci0] 2026-11-25 12:31:07.023479
+      L2CAP: Configure Response (0x05) ident 5 len 10
+        Source CID: 65
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+> HCI Event: Number of.. (0x13) plen 5  #3672 [hci0] 2026-11-25 12:31:07.038085
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3671: len 18 (10 Kb/s)
+        Latency: 14 msec (4-20 msec ~13 msec)
+> BR-ACL: Handle... flags 0x02 dlen 12  #3673 [hci0] 2026-11-25 12:31:07.047441
+      L2CAP: Connection Request (0x02) ident 6 len 4
+        PSM: 19 (0x0013)
+        Source CID: 66
+< BR-ACL: Handle... flags 0x00 dlen 16  #3674 [hci0] 2026-11-25 12:31:07.047594
+      L2CAP: Connection Response (0x03) ident 6 len 8
+        Destination CID: 65
+        Source CID: 66
+        Result: Connection pending (0x0001)
+        Status: Authorization pending (0x0002)
+< BR-ACL: Handle... flags 0x00 dlen 16  #3675 [hci0] 2026-11-25 12:31:07.047885
+      L2CAP: Connection Response (0x03) ident 6 len 8
+        Destination CID: 65
+        Source CID: 66
+        Result: Connection successful (0x0000)
+        Status: No further information available (0x0000)
+< BR-ACL: Handle... flags 0x00 dlen 12  #3676 [hci0] 2026-11-25 12:31:07.047899
+      L2CAP: Configure Request (0x04) ident 5 len 4
+        Destination CID: 66
+        Flags: 0x0000
+> HCI Event: Number of.. (0x13) plen 5  #3677 [hci0] 2026-11-25 12:31:07.058964
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3674: len 16 (11 Kb/s)
+        Latency: 11 msec (4-20 msec ~12 msec)
+> HCI Event: Number of.. (0x13) plen 5  #3678 [hci0] 2026-11-25 12:31:07.059880
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3675: len 16 (11 Kb/s)
+        Latency: 11 msec (4-20 msec ~12 msec)
+> HCI Event: Number of.. (0x13) plen 5  #3679 [hci0] 2026-11-25 12:31:07.062999
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3676: len 12 (6 Kb/s)
+        Latency: 15 msec (4-20 msec ~13 msec)
+> BR-ACL: Handle... flags 0x02 dlen 16  #3680 [hci0] 2026-11-25 12:31:07.070441
+      L2CAP: Configure Request (0x04) ident 7 len 8
+        Destination CID: 65
+        Flags: 0x0000
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+> BR-ACL: Handle... flags 0x02 dlen 18  #3681 [hci0] 2026-11-25 12:31:07.070448
+      L2CAP: Configure Response (0x05) ident 5 len 10
+        Source CID: 65
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+< BR-ACL: Handle... flags 0x00 dlen 18  #3682 [hci0] 2026-11-25 12:31:07.070516
+      L2CAP: Configure Response (0x05) ident 7 len 10
+        Source CID: 66
+        Flags: 0x0000
+        Result: Success (0x0000)
+        Option: Maximum Transmission Unit (0x01) [mandatory]
+          MTU: 672
+< BR-ACL: Handle 2.. flags 0x00 dlen 6  #3683 [hci0] 2026-11-25 12:31:07.073084
+      Channel: 65 len 2 [PSM 17 mode Basic (0x00)] {chan 0}
+        43 09                                            C.              
+> HCI Event: Number of.. (0x13) plen 5  #3684 [hci0] 2026-11-25 12:31:07.083035
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3682: len 18 (12 Kb/s)
+        Latency: 12 msec (4-20 msec ~13 msec)
+> HCI Event: Number of.. (0x13) plen 5  #3685 [hci0] 2026-11-25 12:31:07.084007
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3683: len 6 (4 Kb/s)
+        Latency: 10 msec (4-20 msec ~12 msec)
+        Channel: 65 [PSM 17 mode Basic (0x00)] {chan 0}
+        Channel Latency: 10 msec (10-10 msec ~10 msec)
+> BR-ACL: Handle... flags 0x02 dlen 15  #3686 [hci0] 2026-11-25 12:31:07.093453
+      Channel: 65 len 11 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 01 7e 7f 7c 84 08 00 00 00 00                 ..~.|......     
+> BR-ACL: Handle... flags 0x02 dlen 15  #3687 [hci0] 2026-11-25 12:31:07.093461
+      Channel: 65 len 11 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 01 7e 7f 7c 84 08 00 04 00 00                 ..~.|......     
+> BR-ACL: Handle... flags 0x02 dlen 25  #3688 [hci0] 2026-11-25 12:31:07.093462
+      Channel: 64 len 21 [PSM 17 mode Basic (0x00)] {chan 0}
+        a3 09 4b 7f ad 1b 36 ac 08 25 00 87 99 23 4c e0  ..K...6..%...#L.
+        00 18 83 48 61                                   ...Ha           
+> BR-ACL: Handle... flags 0x02 dlen 83  #3689 [hci0] 2026-11-25 12:31:07.093463
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7e 7f 7c 84 00 00 01 08 00 00 00 68 43  .1!~.|........hC
+        17 1d fd ff fb ff 05 00 41 fe b0 1e 6a 0a 69 47  ........A...j.iG
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 06 b0 1d d9 4f a1  ....@.........O.
+        9c 22 00 00 00 00 00 00 00 00 00 15 66 0c c6     ."..........f.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3690 [hci0] 2026-11-25 12:31:07.093464
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7e 7f 7c 84 00 00 01 08 00 00 00 69 43  .11~.|........iC
+        17 1d fc ff f9 ff 08 00 42 fe b8 1e 5f 0a 53 5d  ........B..._.S]
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 5f f6 92 ab 97 e8  ....@....._.....
+        08 a2 00 00 00 00 00 00 00 00 00 cf 89 d7 98     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3691 [hci0] 2026-11-25 12:31:07.093464
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 6a 43  .1A~.|........jC
+        17 1d fd ff fb ff 05 00 50 fe b5 1e 6e 0a 8a 7a  ........P...n..z
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 57 b3 4c 41 c6 b7  ....@.....W.LA..
+        c8 c3 00 00 00 00 00 00 00 00 00 72 79 0b 7d     ...........ry.} 
+< BR-ACL: Handle 2.. flags 0x00 dlen 6  #3692 [hci0] 2026-11-25 12:31:07.094031
+      Channel: 65 len 2 [PSM 17 mode Basic (0x00)] {chan 0}
+        43 20                                            C               
+> HCI Event: Number of.. (0x13) plen 5  #3693 [hci0] 2026-11-25 12:31:07.097000
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3692: len 6 (24 Kb/s)
+        Latency: 2 msec (2-20 msec ~7 msec)
+        Channel: 65 [PSM 17 mode Basic (0x00)] {chan 0}
+        Channel Latency: 2 msec (2-10 msec ~6 msec)
+> BR-ACL: Handle... flags 0x02 dlen 83  #3694 [hci0] 2026-11-25 12:31:07.102379
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 6b 43  .1Q~.|........kC
+        17 1d ff ff fa ff 06 00 52 fe bb 1e 73 0a c1 97  ........R...s...
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 9b b4 82 8d 61 d0  ....@.........a.
+        ee 64 00 00 00 00 00 00 00 00 00 b0 c0 82 88     .d............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3695 [hci0] 2026-11-25 12:31:07.102383
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 6c 43  .1a~.|........lC
+        17 1d fe ff fa ff 06 00 62 fe be 1e 70 0a 5d a6  ........b...p.].
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 57 f3 a4 c0 94 26  ....@.....W....&
+        21 cb 00 00 00 00 00 00 00 00 00 5a 0f f5 ac     !..........Z... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3696 [hci0] 2026-11-25 12:31:07.102383
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 6d 43  .1q~.|........mC
+        17 1d fd ff fd ff 05 00 59 fe b4 1e 60 0a f9 b4  ........Y...`...
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 24 03 d3 86 e0 d5  ....@.....$.....
+        96 65 00 00 00 00 00 00 00 00 00 9d d2 1d f6     .e............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3697 [hci0] 2026-11-25 12:31:07.102384
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 6e 43  .1.~.|........nC
+        17 1d fc ff fa ff 07 00 4f fe b6 1e 62 0a 94 c3  ........O...b...
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 47 d1 c7 e9 4e 15  ....@.....G...N.
+        94 57 00 00 00 00 00 00 00 00 00 95 22 73 e4     .W.........."s. 
+> BR-ACL: Handle... flags 0x02 dlen 69  #3698 [hci0] 2026-11-25 12:31:07.102385
+      Channel: 64 len 65 [PSM 17 mode Basic (0x00)] {chan 0}
+        a3 20 4a 75 6e 20 32 31 20 32 30 32 34 31 39 3a  . Jun 21 202419:
+        30 39 3a 31 37 03 00 44 00 16 02 00 01 78 00 00  09:17..D.....x..
+        01 c1 c8 00 00 00 00 00 00 00 00 00 00 00 02 00  ................
+        00 14 00 00 00 09 00 02 00 06 00 00 00 3a 37 a7  .............:7.
+        6d                                               m               
+> BR-ACL: Handle... flags 0x02 dlen 83  #3699 [hci0] 2026-11-25 12:31:07.102385
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 6f 43  .1.~.|........oC
+        17 1d fa ff f9 ff 05 00 57 fe b7 1e 64 0a 30 d2  ........W...d.0.
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 18 43 41 c8 da 84  ....@......CA...
+        d4 f5 00 00 00 00 00 00 00 00 00 85 76 8c 49     ............v.I 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3700 [hci0] 2026-11-25 12:31:07.102386
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7e 7f 7c 84 00 00 01 08 00 00 00 70 43  .1.~.|........pC
+        17 1d f9 ff fb ff 02 00 58 fe ad 1e 70 0a cc e0  ........X...p...
+        e2 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 b5 33 5d da 6a 36  ....@......3].j6
+        17 23 00 00 00 00 00 00 00 00 00 45 ee f0 0c     .#.........E... 
+< BR-ACL: Handle 2.. flags 0x00 dlen 6  #3701 [hci0] 2026-11-25 12:31:07.102731
+      Channel: 65 len 2 [PSM 17 mode Basic (0x00)] {chan 0}
+        43 05                                            C.              
+> HCI Event: Number of.. (0x13) plen 5  #3702 [hci0] 2026-11-25 12:31:07.105995
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3701: len 6 (16 Kb/s)
+        Latency: 3 msec (2-20 msec ~5 msec)
+        Channel: 65 [PSM 17 mode Basic (0x00)] {chan 0}
+        Channel Latency: 3 msec (2-10 msec ~5 msec)
+> BR-ACL: Handle... flags 0x02 dlen 83  #3703 [hci0] 2026-11-25 12:31:07.111383
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 71 43  .1.~.|........qC
+        17 1d fc ff f8 ff 05 00 4d fe b5 1e 6c 0a b5 f6  ........M...l...
+        e2 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 e6 67 ea d3 6f 02  ....@......g..o.
+        8e c1 00 00 00 00 00 00 00 00 00 1a e8 50 88     .............P. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3704 [hci0] 2026-11-25 12:31:07.111389
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 72 43  .1.~.|........rC
+        17 1d fc ff fc ff 04 00 55 fe c3 1e 6d 0a 9f 0c  ........U...m...
+        e3 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 30 32 8e bd de 94  ....@.....02....
+        cd e0 00 00 00 00 00 00 00 00 00 d6 6c 4f fc     ............lO. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3705 [hci0] 2026-11-25 12:31:07.111390
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 73 43  .1.~.|........sC
+        17 1d fa ff f9 ff 04 00 53 fe c7 1e 64 0a 3a 1b  ........S...d.:.
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c4 b6 fa 65 3e 0e  ....@........e>.
+        bf a1 00 00 00 00 00 00 00 00 00 e6 f6 4d 07     .............M. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3706 [hci0] 2026-11-25 12:31:07.111390
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 74 43  .1.~.|........tC
+        17 1d fd ff fb ff 05 00 58 fe ae 1e 58 0a d6 29  ........X...X..)
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 af 51 89 4b 91 d6  ....@......Q.K..
+        9b af 00 00 00 00 00 00 00 00 00 89 ca c2 b8     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 46  #3707 [hci0] 2026-11-25 12:31:07.111391
+      Channel: 64 len 42 [PSM 17 mode Basic (0x00)] {chan 0}
+        a3 05 fb ff f8 ff fe ff 8c 22 6f dd 7f 22 72 dd  ........."o.."r.
+        a3 22 57 dd 1c 02 1c 02 e8 1f e2 df 51 20 40 e0  ."W.........Q @.
+        0e 20 f7 df 06 00 b4 82 7d 6e                    . ......}n      
+> BR-ACL: Handle... flags 0x02 dlen 83  #3708 [hci0] 2026-11-25 12:31:07.111392
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 f1 7e 7f 7c 84 00 00 01 08 00 00 00 75 43  .1.~.|........uC
+        17 1d fd ff fc ff 06 00 59 fe af 1e 61 0a 72 38  ........Y...a.r8
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 d6 96 57 f6 37 a7  ....@.......W.7.
+        ea 07 00 00 00 00 00 00 00 00 00 95 41 02 b7     ............A.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3709 [hci0] 2026-11-25 12:31:07.111392
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 01 7e 7f 7c 84 00 00 01 08 00 00 00 76 43  .1.~.|........vC
+        17 1d fb ff fb ff 05 00 58 fe c0 1e 61 0a 5b 4e  ........X...a.[N
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 e9 68 15 46 55 8f  ....@......h.FU.
+        9c d8 00 00 00 00 00 00 00 00 00 89 95 8c 8d     ............... 
+< BR-ACL: Handle... flags 0x00 dlen 83  #3710 [hci0] 2026-11-25 12:31:07.113676
+      Channel: 66 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a2 31 00 10 00 00 00 00 00 00 00 00 00 00 00 00  .1..............
+        00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+        00 00 00 00 00 00 00 00 00 00 02 00 00 02 00 00  ................
+        00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+        00 00 00 00 00 00 00 00 00 00 00 43 e6 31 36     ...........C.16 
+< BR-ACL: Handle... flags 0x00 dlen 83  #3711 [hci0] 2026-11-25 12:31:07.114331
+      Channel: 66 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a2 31 10 10 00 14 00 00 00 00 00 00 00 00 00 00  .1..............
+        00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+        00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 04  ................
+        00 00 80 00 00 00 00 00 00 00 00 00 00 00 00 00  ................
+        00 00 00 00 00 00 00 00 00 00 00 41 42 09 dc     ...........AB.. 
+> HCI Event: Number of.. (0x13) plen 5  #3712 [hci0] 2026-11-25 12:31:07.118999
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3710: len 83 (132 Kb/s)
+        Latency: 5 msec (2-20 msec ~5 msec)
+        Channel: 66 [PSM 19 mode Basic (0x00)] {chan 1}
+        Channel Latency: 5 msec (5-5 msec ~5 msec)
+> HCI Event: Number of.. (0x13) plen 5  #3713 [hci0] 2026-11-25 12:31:07.119999
+        Num handles: 1
+        Handle: 2 (BR-ACL) Address: AC:36:1B:AD:7F:4B (Hon Hai Precision Industry Co.,LTD)
+        Count: 1
+        #3711: len 83 (132 Kb/s)
+        Latency: 5 msec (2-20 msec ~5 msec)
+        Channel: 66 [PSM 19 mode Basic (0x00)] {chan 1}
+        Channel Latency: 5 msec (5-5 msec ~5 msec)
+> BR-ACL: Handle... flags 0x02 dlen 83  #3714 [hci0] 2026-11-25 12:31:07.120433
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 11 7e 7f 7c 84 00 00 01 08 00 00 00 77 43  .1.~.|........wC
+        17 1d fb ff fc ff 04 00 5f fe af 1e 57 0a 92 6b  ........_...W..k
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 14 c4 d6 39 12 8a  ....@........9..
+        80 89 00 00 00 00 00 00 00 00 00 8f 8a 17 bf     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3715 [hci0] 2026-11-25 12:31:07.120437
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7f 7f 7c 84 00 00 01 08 00 00 00 78 43  .1!..|........xC
+        17 1d fb ff fd ff 06 00 45 fe a4 1e 51 0a 7c 81  ........E...Q.|.
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 7d 8e 66 fb 16 d9  ....@.....}.f...
+        36 e2 00 00 00 00 00 00 00 00 00 65 fe c2 03     6..........e... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3716 [hci0] 2026-11-25 12:31:07.120437
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7e 7f 7c 84 00 00 01 08 00 00 00 79 43  .11~.|........yC
+        17 1d fd ff fc ff 04 00 4e fe b3 1e 59 0a 17 90  ........N...Y...
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 db d5 40 a5 c6 1a  ....@.......@...
+        22 42 00 00 00 00 00 00 00 00 00 13 dd de b1     "B............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3717 [hci0] 2026-11-25 12:31:07.120438
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 7a 43  .1A~.|........zC
+        17 1d fc ff fc ff 05 00 4d fe a1 1e 5a 0a b3 9e  ........M...Z...
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 8e 5a 19 92 c4 e6  ....@......Z....
+        9c b9 00 00 00 00 00 00 00 00 00 bc 3c a9 f0     ............<.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3718 [hci0] 2026-11-25 12:31:07.120439
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 7b 43  .1Q~.|........{C
+        17 1d fa ff f9 ff 05 00 4c fe a4 1e 53 0a 9c b4  ........L...S...
+        e3 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 8f dd 7b 8c 8a 1f  ....@.......{...
+        3e bf 00 00 00 00 00 00 00 00 00 00 a0 46 12     >............F. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3719 [hci0] 2026-11-25 12:31:07.120439
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 7c 43  .1a~.|........|C
+        17 1d fb ff fc ff 06 00 52 fe a3 1e 60 0a 86 ca  ........R...`...
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 6b 33 76 0b f5 b4  ....@.....k3v...
+        a4 20 00 00 00 00 00 00 00 00 00 3e b6 a5 b1     . .........>... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3720 [hci0] 2026-11-25 12:31:07.131358
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 7d 43  .1q~.|........}C
+        17 1d fc ff fd ff 07 00 5c fe b2 1e 61 0a 22 d9  ........\...a.".
+        e3 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 5c e4 ec f2 82 11  ....@.....\.....
+        ce 31 00 00 00 00 00 00 00 00 00 92 e8 73 b4     .1...........s. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3721 [hci0] 2026-11-25 12:31:07.131367
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 7e 43  .1.~.|........~C
+        17 1d fb ff fb ff 05 00 54 fe b7 1e 59 0a bd e7  ........T...Y...
+        e3 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 7b 39 a9 4f 21 19  ....@.....{9.O!.
+        77 de 00 00 00 00 00 00 00 00 00 61 b5 18 b9     w..........a... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3722 [hci0] 2026-11-25 12:31:07.131367
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 7f 43  .1.~.|.........C
+        17 1d fb ff fa ff 05 00 46 fe b1 1e 54 0a 59 f6  ........F...T.Y.
+        e3 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 b6 3b 57 37 82 29  ....@......;W7.)
+        9c b3 00 00 00 00 00 00 00 00 00 b8 b6 0d 44     ..............D 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3723 [hci0] 2026-11-25 12:31:07.131368
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7e 7f 7c 84 00 00 01 08 00 00 00 80 43  .1.~.|.........C
+        17 1d fa ff fb ff 05 00 45 fe a1 1e 55 0a f5 04  ........E...U...
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 00 93 00 ef a5 9b  ....@...........
+        87 a4 00 00 00 00 00 00 00 00 00 d6 2d bb d8     ............-.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3724 [hci0] 2026-11-25 12:31:07.131368
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 81 43  .1.~.|.........C
+        17 1d f9 ff f9 ff 04 00 3d fe a2 1e 64 0a 90 13  ........=...d...
+        e4 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ec b7 72 10 bd f8  ....@.......r...
+        41 0d 00 00 00 00 00 00 00 00 00 ae 84 f7 82     A.............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3725 [hci0] 2026-11-25 12:31:07.131369
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 82 43  .1.~.|.........C
+        17 1d fa ff fc ff 05 00 45 fe b0 1e 64 0a d3 25  ........E...d..%
+        e4 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c6 5c 8b 41 48 26  ....@......\.AH&
+        b3 25 00 00 00 00 00 00 00 00 00 ea f0 a8 b3     .%............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3726 [hci0] 2026-11-25 12:31:07.131369
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 83 43  .1.~.|.........C
+        17 1d fb ff fc ff 05 00 5d fe a3 1e 60 0a 6f 34  ........]...`.o4
+        e4 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 73 11 68 85 ef 18  ....@.....s.h...
+        b9 c8 00 00 00 00 00 00 00 00 00 58 0d 28 94     ...........X.(. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3727 [hci0] 2026-11-25 12:31:07.131369
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 84 43  .1.~.|.........C
+        17 1d fa ff fc ff 05 00 5e fe a7 1e 60 0a 0a 43  ........^...`..C
+        e4 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 e8 02 3f ba f6 46  ....@.......?..F
+        27 88 00 00 00 00 00 00 00 00 00 44 e1 ba b9     '..........D... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3728 [hci0] 2026-11-25 12:31:07.131370
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 f1 7e 7f 7c 84 00 00 01 08 00 00 00 85 43  .1.~.|.........C
+        17 1d fc ff fe ff 05 00 50 fe ab 1e 70 0a 4d 55  ........P...p.MU
+        e4 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c2 c0 3a 69 a4 95  ....@.......:i..
+        81 2f 00 00 00 00 00 00 00 00 00 cf 2c 8c 53     ./..........,.S 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3729 [hci0] 2026-11-25 12:31:07.141345
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 01 7e 7f 7c 84 00 00 01 08 00 00 00 86 43  .1.~.|.........C
+        17 1d fb ff fa ff 06 00 48 fe a6 1e 6e 0a e8 63  ........H...n..c
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 9e 07 f3 7a dd c0  ....@........z..
+        f0 de 00 00 00 00 00 00 00 00 00 23 85 fc c8     ...........#... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3730 [hci0] 2026-11-25 12:31:07.141348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 11 7e 7f 7c 84 00 00 01 08 00 00 00 87 43  .1.~.|.........C
+        17 1d f9 ff f8 ff 04 00 54 fe ae 1e 66 0a 84 72  ........T...f..r
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ca 44 dc ac 17 e5  ....@......D....
+        25 c2 00 00 00 00 00 00 00 00 00 9b 31 dc a5     %...........1.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3731 [hci0] 2026-11-25 12:31:07.141348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7e 7f 7c 84 00 00 01 08 00 00 00 88 43  .1!~.|.........C
+        17 1d fa ff fb ff 06 00 4b fe b4 1e 69 0a 20 81  ........K...i. .
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 b3 ed cd 01 05 18  ....@...........
+        26 4e 00 00 00 00 00 00 00 00 00 25 da fa 85     &N.........%... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3732 [hci0] 2026-11-25 12:31:07.141348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7e 7f 7c 84 00 00 01 08 00 00 00 89 43  .11~.|.........C
+        17 1d fa ff fd ff 05 00 3e fe b8 1e 69 0a bb 8f  ........>...i...
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 df 70 c2 a7 60 03  ....@......p..`.
+        82 73 00 00 00 00 00 00 00 00 00 ed 63 6e 7b     .s..........cn{ 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3733 [hci0] 2026-11-25 12:31:07.141348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 8a 43  .1A~.|.........C
+        17 1d fb ff fe ff 04 00 4f fe ae 1e 68 0a 57 9e  ........O...h.W.
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ba 42 1d 53 ed 07  ....@......B.S..
+        d1 6d 00 00 00 00 00 00 00 00 00 a7 37 8a 27     .m..........7.' 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3734 [hci0] 2026-11-25 12:31:07.141349
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 8b 43  .1Q~.|.........C
+        17 1d f8 ff fd ff 04 00 52 fe 9e 1e 6c 0a f3 ac  ........R...l...
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 11 7c d0 a3 0f 09  ....@......|....
+        4f 14 00 00 00 00 00 00 00 00 00 0a d3 fb df     O.............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3735 [hci0] 2026-11-25 12:31:07.141349
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 8c 43  .1a~.|.........C
+        17 1d f9 ff fc ff 06 00 49 fe a3 1e 75 0a 8e bb  ........I...u...
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 96 73 e4 8d ba 1f  ....@......s....
+        93 75 00 00 00 00 00 00 00 00 00 fe 59 07 26     .u..........Y.& 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3736 [hci0] 2026-11-25 12:31:07.141349
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 8d 43  .1q~.|.........C
+        17 1d fb ff fc ff 04 00 47 fe 9e 1e 6a 0a 2a ca  ........G...j.*.
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 73 e3 d4 08 4b 5b  ....@.....s...K[
+        fa 34 00 00 00 00 00 00 00 00 00 65 f4 c1 85     .4.........e... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3737 [hci0] 2026-11-25 12:31:07.152361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 8e 43  .1.~.|.........C
+        17 1d fb ff fd ff 03 00 3f fe af 1e 5c 0a c5 d8  ........?...\...
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 3d ef f2 c2 a8 07  ....@.....=.....
+        b8 0a 00 00 00 00 00 00 00 00 00 3d b5 e4 cf     ...........=... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3738 [hci0] 2026-11-25 12:31:07.152364
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 8f 43  .1.~.|.........C
+        17 1d fd ff fd ff 06 00 44 fe ae 1e 5e 0a 61 e7  ........D...^.a.
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 89 f5 d0 9f c1 fc  ....@...........
+        78 d0 00 00 00 00 00 00 00 00 00 24 6b 6b c1     x..........$kk. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3739 [hci0] 2026-11-25 12:31:07.152365
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7e 7f 7c 84 00 00 01 08 00 00 00 90 43  .1.~.|.........C
+        17 1d fd ff fa ff 05 00 49 fe c0 1e 5d 0a ff f5  ........I...]...
+        e4 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 e5 a0 91 f9 23 9a  ....@.........#.
+        08 24 00 00 00 00 00 00 00 00 00 43 40 ba db     .$.........C@.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3740 [hci0] 2026-11-25 12:31:07.152365
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 91 43  .1.~.|.........C
+        17 1d fb ff fa ff 06 00 44 fe be 1e 6c 0a 9a 04  ........D...l...
+        e5 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 f0 3c 03 7d 73 17  ....@......<.}s.
+        d9 1f 00 00 00 00 00 00 00 00 00 83 02 36 0a     .............6. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3741 [hci0] 2026-11-25 12:31:07.152365
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 92 43  .1.~.|.........C
+        17 1d fc ff fb ff 05 00 4a fe b5 1e 6c 0a 34 13  ........J...l.4.
+        e5 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 90 ab 5e ca 02 e2  ....@.......^...
+        bf a1 00 00 00 00 00 00 00 00 00 8d 19 af 90     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3742 [hci0] 2026-11-25 12:31:07.152365
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 93 43  .1.~.|.........C
+        17 1d fe ff fd ff 03 00 4d fe ad 1e 5c 0a d0 21  ........M...\..!
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 8f f7 d3 7a 74 7c  ....@........zt|
+        fd 85 00 00 00 00 00 00 00 00 00 4f f5 27 d7     ...........O.'. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3743 [hci0] 2026-11-25 12:31:07.152365
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 94 43  .1.~.|.........C
+        17 1d fe ff fc ff 04 00 45 fe bb 1e 6c 0a 6c 30  ........E...l.l0
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 36 75 85 0a 48 88  ....@.....6u..H.
+        ef 30 00 00 00 00 00 00 00 00 00 f7 47 69 8f     .0..........Gi. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3744 [hci0] 2026-11-25 12:31:07.152366
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 f1 7e 7f 7c 84 00 00 01 08 00 00 00 95 43  .1.~.|.........C
+        17 1d fc ff fa ff 04 00 4a fe b3 1e 70 0a 07 3f  ........J...p..?
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 1e 14 c3 f6 10 ea  ....@...........
+        58 93 00 00 00 00 00 00 00 00 00 9d 5c f3 30     X...........\.0 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3745 [hci0] 2026-11-25 12:31:07.162349
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 01 7e 7f 7c 84 00 00 01 08 00 00 00 96 43  .1.~.|.........C
+        17 1d fc ff fb ff 06 00 4d fe ab 1e 74 0a a3 4d  ........M...t..M
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 60 0c 49 04 2e b4  ....@.....`.I...
+        6e 6c 00 00 00 00 00 00 00 00 00 b3 e3 d7 04     nl............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3746 [hci0] 2026-11-25 12:31:07.162353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 11 7e 7f 7c 84 00 00 01 08 00 00 00 97 43  .1.~.|.........C
+        17 1d fe ff fc ff 06 00 51 fe b0 1e 68 0a 3e 5c  ........Q...h.>\
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 47 46 6c 7a f8 6c  ....@.....GFlz.l
+        83 86 00 00 00 00 00 00 00 00 00 e8 f4 48 23     .............H# 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3747 [hci0] 2026-11-25 12:31:07.162353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7e 7f 7c 84 00 00 01 08 00 00 00 98 43  .1!~.|.........C
+        17 1d fe ff fb ff 05 00 55 fe aa 1e 65 0a da 6a  ........U...e..j
+        e5 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 5d 33 b9 65 fe 60  ....@.....]3.e.`
+        54 fd 00 00 00 00 00 00 00 00 00 a1 09 bf 82     T.............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3748 [hci0] 2026-11-25 12:31:07.162353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7f 7f 7c 84 00 00 01 08 00 00 00 99 43  .11..|.........C
+        17 1d fe ff fc ff 05 00 54 fe b5 1e 57 0a 76 79  ........T...W.vy
+        e5 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 26 fe 44 9b db 1d  ....@.....&.D...
+        36 9b 00 00 00 00 00 00 00 00 00 a1 01 47 cf     6............G. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3749 [hci0] 2026-11-25 12:31:07.162354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 9a 43  .1A~.|.........C
+        17 1d fc ff fe ff 03 00 57 fe ad 1e 66 0a 11 88  ........W...f...
+        e5 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 24 b2 9e c0 de d5  ....@.....$.....
+        18 d1 00 00 00 00 00 00 00 00 00 40 8a b4 7e     ...........@..~ 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3750 [hci0] 2026-11-25 12:31:07.162354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 9b 43  .1Q~.|.........C
+        17 1d fc ff fb ff 04 00 5d fe a6 1e 60 0a ad 96  ........]...`...
+        e5 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 2b 37 f7 ed ea 3c  ....@.....+7...<
+        3b 75 00 00 00 00 00 00 00 00 00 03 61 1c 83     ;u..........a.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3751 [hci0] 2026-11-25 12:31:07.162354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 9c 43  .1a~.|.........C
+        17 1d fe ff fb ff 04 00 5a fe b5 1e 6c 0a 49 a5  ........Z...l.I.
+        e5 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 2f f3 cf 61 07 19  ....@...../..a..
+        49 10 00 00 00 00 00 00 00 00 00 22 e9 54 c7     I..........".T. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3752 [hci0] 2026-11-25 12:31:07.162354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 9d 43  .1q~.|.........C
+        17 1d fe ff fb ff 05 00 53 fe a8 1e 6b 0a e4 b3  ........S...k...
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 e5 ef 54 63 7f e2  ....@.......Tc..
+        6b 48 00 00 00 00 00 00 00 00 00 68 0f 6a 57     kH.........h.jW 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3753 [hci0] 2026-11-25 12:31:07.171348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 9e 43  .1.~.|.........C
+        17 1d fe ff fd ff 03 00 59 fe ac 1e 71 0a 80 c2  ........Y...q...
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 a0 35 7a d5 89 fa  ....@......5z...
+        41 c4 00 00 00 00 00 00 00 00 00 1a 8e f7 c7     A.............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3754 [hci0] 2026-11-25 12:31:07.171353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 9f 43  .1.~.|.........C
+        17 1d fe ff fe ff 02 00 5e fe 9f 1e 6d 0a 1c d1  ........^...m...
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 15 23 55 4c 91 07  ....@......#UL..
+        93 13 00 00 00 00 00 00 00 00 00 22 96 ba b6     ..........."... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3755 [hci0] 2026-11-25 12:31:07.171353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7e 7f 7c 84 00 00 01 08 00 00 00 a0 43  .1.~.|.........C
+        17 1d fe ff fe ff 03 00 59 fe a4 1e 65 0a b7 df  ........Y...e...
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 d2 db 32 3c ed bd  ....@.......2<..
+        95 a0 00 00 00 00 00 00 00 00 00 37 58 31 cd     ...........7X1. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3756 [hci0] 2026-11-25 12:31:07.171354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 a1 43  .1.~.|.........C
+        17 1d fe ff fe ff 04 00 61 fe b5 1e 66 0a 53 ee  ........a...f.S.
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 66 cf 0d ea 3b 23  ....@.....f...;#
+        4b 4e 00 00 00 00 00 00 00 00 00 ac 14 88 26     KN............& 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3757 [hci0] 2026-11-25 12:31:07.171354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 a2 43  .1.~.|.........C
+        17 1d ff ff fb ff 05 00 50 fe c6 1e 57 0a ee fc  ........P...W...
+        e5 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ef 37 8a 60 4e 73  ....@......7.`Ns
+        f9 74 00 00 00 00 00 00 00 00 00 7c ab 4a de     .t.........|.J. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3758 [hci0] 2026-11-25 12:31:07.171354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 a3 43  .1.~.|.........C
+        17 1d 00 00 fc ff 03 00 4b fe bc 1e 4c 0a 8a 0b  ........K...L...
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 44 4f 03 2e 90 8c  ....@.....DO....
+        1c 2a 00 00 00 00 00 00 00 00 00 11 7a a5 48     .*..........z.H 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3759 [hci0] 2026-11-25 12:31:07.171355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 a4 43  .1.~.|.........C
+        17 1d 01 00 fc ff 04 00 5f fe b6 1e 5c 0a 26 1a  ........_...\.&.
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 01 b5 ae 85 57 b0  ....@.........W.
+        4b 47 00 00 00 00 00 00 00 00 00 94 ff dd 8e     KG............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3760 [hci0] 2026-11-25 12:31:07.171355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 f1 7e 7f 7c 84 00 00 01 08 00 00 00 a5 43  .1.~.|.........C
+        17 1d 01 00 fd ff 04 00 65 fe b9 1e 65 0a c1 28  ........e...e..(
+        e6 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 72 9f 2a a8 20 d8  ....@.....r.*. .
+        b2 88 00 00 00 00 00 00 00 00 00 50 4a 51 e4     ...........PJQ. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3761 [hci0] 2026-11-25 12:31:07.181347
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 01 7e 7f 7c 84 00 00 01 08 00 00 00 a6 43  .1.~.|.........C
+        17 1d ff ff fc ff 04 00 69 fe b6 1e 6c 0a 5d 37  ........i...l.]7
+        e6 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 02 7d d4 25 49 83  ....@......}.%I.
+        d0 a4 00 00 00 00 00 00 00 00 00 87 91 8d 98     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3762 [hci0] 2026-11-25 12:31:07.181351
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 11 7e 7f 7c 84 00 00 01 08 00 00 00 a7 43  .1.~.|.........C
+        17 1d ff ff fd ff 06 00 65 fe ab 1e 60 0a f9 45  ........e...`..E
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 5f 86 3e d3 26 fe  ....@....._.>.&.
+        94 b4 00 00 00 00 00 00 00 00 00 21 c2 e0 ca     ...........!... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3763 [hci0] 2026-11-25 12:31:07.181351
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7e 7f 7c 84 00 00 01 08 00 00 00 a8 43  .1!~.|.........C
+        17 1d ff ff fb ff 05 00 58 fe b5 1e 5c 0a 94 54  ........X...\..T
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 a5 48 7b a0 f3 52  ....@......H{..R
+        6b 61 00 00 00 00 00 00 00 00 00 c0 0b e3 a4     ka............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3764 [hci0] 2026-11-25 12:31:07.181351
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7e 7f 7c 84 00 00 01 08 00 00 00 a9 43  .11~.|.........C
+        17 1d 00 00 fc ff 03 00 46 fe bc 1e 4f 0a 30 63  ........F...O.0c
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 2d 0e 97 ff cd e4  ....@.....-.....
+        75 cb 00 00 00 00 00 00 00 00 00 2f 5d 77 45     u........../]wE 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3765 [hci0] 2026-11-25 12:31:07.181351
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 aa 43  .1A~.|.........C
+        17 1d 00 00 fc ff 04 00 39 fe b9 1e 56 0a cc 71  ........9...V..q
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 55 b9 1d e5 b8 43  ....@.....U....C
+        88 03 00 00 00 00 00 00 00 00 00 f5 50 c4 21     ............P.! 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3766 [hci0] 2026-11-25 12:31:07.181352
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 ab 43  .1Q~.|.........C
+        17 1d 00 00 fb ff 03 00 49 fe b4 1e 59 0a 67 80  ........I...Y.g.
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 62 9f e9 4b f9 b1  ....@.....b..K..
+        99 0c 00 00 00 00 00 00 00 00 00 54 de 93 af     ...........T... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3767 [hci0] 2026-11-25 12:31:07.181352
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 ac 43  .1a~.|.........C
+        17 1d ff ff ff ff 04 00 5f fe ae 1e 4a 0a 03 8f  ........_...J...
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 56 98 47 9a 1e 97  ....@.....V.G...
+        1c 99 00 00 00 00 00 00 00 00 00 5f 69 cf 23     ..........._i.# 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3768 [hci0] 2026-11-25 12:31:07.181352
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 ad 43  .1q~.|.........C
+        17 1d ff ff fc ff 03 00 65 fe ad 1e 53 0a 9f 9d  ........e...S...
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 1a 72 58 81 2a b7  ....@......rX.*.
+        a9 2d 00 00 00 00 00 00 00 00 00 00 60 49 d0     .-..........`I. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3769 [hci0] 2026-11-25 12:31:07.191356
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 ae 43  .1.~.|.........C
+        17 1d 00 00 f9 ff 03 00 63 fe bb 1e 54 0a 3a ac  ........c...T.:.
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 a2 15 4d 49 41 73  ....@.......MIAs
+        9d 7d 00 00 00 00 00 00 00 00 00 22 65 c7 87     .}........."e.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3770 [hci0] 2026-11-25 12:31:07.191360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 af 43  .1.~.|.........C
+        17 1d 00 00 fa ff 03 00 5d fe aa 1e 55 0a d6 ba  ........]...U...
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 47 b0 cb 3e b9 d7  ....@.....G..>..
+        12 ca 00 00 00 00 00 00 00 00 00 21 31 48 87     ...........!1H. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3771 [hci0] 2026-11-25 12:31:07.191360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7f 7f 7c 84 00 00 01 08 00 00 00 b0 43  .1...|.........C
+        17 1d 01 00 f9 ff 05 00 67 fe b3 1e 4b 0a 71 c9  ........g...K.q.
+        e6 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 2e 0f 21 c4 15 f1  ....@.......!...
+        2a 17 00 00 00 00 00 00 00 00 00 43 06 9c 96     *..........C... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3772 [hci0] 2026-11-25 12:31:07.191361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 b1 43  .1.~.|.........C
+        17 1d 00 00 fc ff 04 00 61 fe b1 1e 4b 0a 5b df  ........a...K.[.
+        e6 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 86 b9 e3 10 58 0f  ....@.........X.
+        09 c9 00 00 00 00 00 00 00 00 00 08 aa d1 35     ..............5 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3773 [hci0] 2026-11-25 12:31:07.191361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 b2 43  .1.~.|.........C
+        17 1d 00 00 fc ff 01 00 51 fe b7 1e 54 0a 44 f5  ........Q...T.D.
+        e6 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 b6 c8 f5 ca 2f eb  ....@........./.
+        ae 88 00 00 00 00 00 00 00 00 00 07 47 b9 07     ............G.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3774 [hci0] 2026-11-25 12:31:07.191361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 b3 43  .1.~.|.........C
+        17 1d 01 00 fb ff 02 00 5c fe b6 1e 51 0a e0 03  ........\...Q...
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 1b 7b 22 7b 7f 9d  ....@......{"{..
+        ed 67 00 00 00 00 00 00 00 00 00 9a 37 93 0f     .g..........7.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3775 [hci0] 2026-11-25 12:31:07.191361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 b4 43  .1.~.|.........C
+        17 1d 03 00 fb ff 04 00 66 fe b4 1e 45 0a 7c 12  ........f...E.|.
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 e2 da cf b3 d2 ff  ....@...........
+        9a 8d 00 00 00 00 00 00 00 00 00 c4 e6 54 cb     .............T. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3776 [hci0] 2026-11-25 12:31:07.201349
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 f1 7e 7f 7c 84 00 00 01 08 00 00 00 b5 43  .1.~.|.........C
+        17 1d 01 00 fd ff 03 00 5e fe bb 1e 48 0a 17 21  ........^...H..!
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c3 2c bd 7f 40 e0  ....@......,..@.
+        3d 3d 00 00 00 00 00 00 00 00 00 4d 6f cf 3c     ==.........Mo.< 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3777 [hci0] 2026-11-25 12:31:07.201351
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 01 7e 7f 7c 84 00 00 01 08 00 00 00 b6 43  .1.~.|.........C
+        17 1d 00 00 fc ff 03 00 52 fe cc 1e 54 0a b3 2f  ........R...T../
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 b4 13 ca 75 8c da  ....@........u..
+        ba de 00 00 00 00 00 00 00 00 00 1c 8a f1 b8     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3778 [hci0] 2026-11-25 12:31:07.201352
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 11 7e 7f 7c 84 00 00 01 08 00 00 00 b7 43  .1.~.|.........C
+        17 1d 02 00 fd ff 03 00 4b fe c6 1e 53 0a 4f 3e  ........K...S.O>
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 23 63 eb 7a 5e 1c  ....@.....#c.z^.
+        10 b1 00 00 00 00 00 00 00 00 00 41 c7 18 e1     ...........A... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3779 [hci0] 2026-11-25 12:31:07.201352
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7e 7f 7c 84 00 00 01 08 00 00 00 b8 43  .1!~.|.........C
+        17 1d 01 00 fd ff 03 00 5b fe c6 1e 50 0a ea 4c  ........[...P..L
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 e1 02 aa 0c 10 8d  ....@...........
+        b8 bc 00 00 00 00 00 00 00 00 00 06 cc 05 a9     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3780 [hci0] 2026-11-25 12:31:07.201352
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7e 7f 7c 84 00 00 01 08 00 00 00 b9 43  .11~.|.........C
+        17 1d 01 00 fe ff 03 00 54 fe c0 1e 43 0a 86 5b  ........T...C..[
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 51 91 78 8e 3b aa  ....@.....Q.x.;.
+        8d 6b 00 00 00 00 00 00 00 00 00 c7 81 4c 89     .k...........L. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3781 [hci0] 2026-11-25 12:31:07.201352
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 ba 43  .1A~.|.........C
+        17 1d 00 00 fc ff 03 00 54 fe b1 1e 52 0a 22 6a  ........T...R."j
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 d5 bc 15 b4 dc ec  ....@...........
+        c8 4f 00 00 00 00 00 00 00 00 00 d3 64 bb 9e     .O..........d.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3782 [hci0] 2026-11-25 12:31:07.201353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 bb 43  .1Q~.|.........C
+        17 1d 00 00 fc ff 01 00 51 fe b7 1e 4f 0a be 78  ........Q...O..x
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 29 0f 1d b0 26 a1  ....@.....)...&.
+        2f 1a 00 00 00 00 00 00 00 00 00 41 45 ae e6     /..........AE.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3783 [hci0] 2026-11-25 12:31:07.211356
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 bc 43  .1a~.|.........C
+        17 1d 00 00 fb ff 03 00 53 fe c0 1e 4c 0a 59 87  ........S...L.Y.
+        e7 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 10 f5 d2 f1 2a d9  ....@.........*.
+        62 ac 00 00 00 00 00 00 00 00 00 4c be 04 6a     b..........L..j 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3784 [hci0] 2026-11-25 12:31:07.211360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 bd 43  .1q~.|.........C
+        17 1d ff ff f9 ff 02 00 4f fe b6 1e 52 0a f5 95  ........O...R...
+        e7 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 18 36 f4 73 8d 72  ....@......6.s.r
+        6e fc 00 00 00 00 00 00 00 00 00 45 69 21 a6     n..........Ei!. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3785 [hci0] 2026-11-25 12:31:07.211360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 be 43  .1.~.|.........C
+        17 1d 00 00 fb ff 03 00 55 fe bb 1e 52 0a de ab  ........U...R...
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c7 3c 01 2b 38 1a  ....@......<.+8.
+        a0 4f 00 00 00 00 00 00 00 00 00 29 d5 d1 6a     .O.........)..j 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3786 [hci0] 2026-11-25 12:31:07.211361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 bf 43  .1.~.|.........C
+        17 1d ff ff fa ff 03 00 61 fe b2 1e 43 0a c7 c1  ........a...C...
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 42 fe 68 31 ca 54  ....@.....B.h1.T
+        2e 44 00 00 00 00 00 00 00 00 00 91 ad 71 fd     .D...........q. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3787 [hci0] 2026-11-25 12:31:07.211361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7e 7f 7c 84 00 00 01 08 00 00 00 c0 43  .1.~.|.........C
+        17 1d ff ff fb ff 01 00 62 fe bb 1e 53 0a 63 d0  ........b...S.c.
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 12 f2 9e 30 79 d6  ....@........0y.
+        c0 aa 00 00 00 00 00 00 00 00 00 3b f7 0d cf     ...........;... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3788 [hci0] 2026-11-25 12:31:07.211361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 c1 43  .1.~.|.........C
+        17 1d fb ff fb ff 03 00 5e fe c4 1e 4c 0a ff de  ........^...L...
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 a4 c1 d3 42 b0 60  ....@........B.`
+        a1 bd 00 00 00 00 00 00 00 00 00 90 81 32 f8     .............2. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3789 [hci0] 2026-11-25 12:31:07.211361
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 c2 43  .1.~.|.........C
+        17 1d fe ff fc ff 06 00 67 fe c8 1e 44 0a e8 f4  ........g...D...
+        e7 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ac f4 d8 b3 86 f5  ....@...........
+        68 c4 00 00 00 00 00 00 00 00 00 10 ff 2e be     h.............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3790 [hci0] 2026-11-25 12:31:07.221350
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 c3 43  .1.~.|.........C
+        17 1d fe ff fc ff 07 00 60 fe c4 1e 43 0a d2 0a  ........`...C...
+        e8 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 39 00 29 1a e9 df  ....@.....9.)...
+        d5 67 00 00 00 00 00 00 00 00 00 79 59 92 d5     .g.........yY.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3791 [hci0] 2026-11-25 12:31:07.221354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 c4 43  .1.~.|.........C
+        17 1d fe ff fd ff 06 00 5c fe c9 1e 4f 0a 6d 19  ........\...O.m.
+        e8 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 53 0d 01 69 fc 4b  ....@.....S..i.K
+        ab 38 00 00 00 00 00 00 00 00 00 b8 76 1f 88     .8..........v.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3792 [hci0] 2026-11-25 12:31:07.221354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 f1 7e 7f 7c 84 00 00 01 08 00 00 00 c5 43  .1.~.|.........C
+        17 1d fe ff fc ff 06 00 59 fe c7 1e 59 0a 09 28  ........Y...Y..(
+        e8 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 3c 8b f7 de 8c a8  ....@.....<.....
+        0c 8b 00 00 00 00 00 00 00 00 00 1b bc 6f 34     .............o4 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3793 [hci0] 2026-11-25 12:31:07.221355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 01 7e 7f 7c 84 00 00 01 08 00 00 00 c6 43  .1.~.|.........C
+        17 1d fe ff fe ff 07 00 58 fe be 1e 59 0a a5 36  ........X...Y..6
+        e8 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 2f eb c1 84 2b 08  ....@...../...+.
+        81 a0 00 00 00 00 00 00 00 00 00 c1 7a bb b2     ............z.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3794 [hci0] 2026-11-25 12:31:07.221355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 11 7e 7f 7c 84 00 00 01 08 00 00 00 c7 43  .1.~.|.........C
+        17 1d fc ff fc ff 07 00 5e fe c5 1e 5b 0a 8e 4c  ........^...[..L
+        e8 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 89 58 75 d2 39 0f  ....@......Xu.9.
+        da dc 00 00 00 00 00 00 00 00 00 02 f4 f5 42     ..............B 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3795 [hci0] 2026-11-25 12:31:07.221355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7e 7f 7c 84 00 00 01 08 00 00 00 c8 43  .1!~.|.........C
+        17 1d f9 ff f9 ff 05 00 53 fe c0 1e 48 0a 78 62  ........S...H.xb
+        e8 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 97 2c 55 09 23 44  ....@......,U.#D
+        3b 5e 00 00 00 00 00 00 00 00 00 b4 79 c6 ee     ;^..........y.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3796 [hci0] 2026-11-25 12:31:07.221355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7e 7f 7c 84 00 00 01 08 00 00 00 c9 43  .11~.|.........C
+        17 1d f9 ff fd ff 06 00 48 fe c1 1e 49 0a 13 71  ........H...I..q
+        e8 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 6a 6e 78 6a da fa  ....@.....jnxj..
+        2f 3b 00 00 00 00 00 00 00 00 00 fb ea 16 53     /;............S 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3797 [hci0] 2026-11-25 12:31:07.232345
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 ca 43  .1A~.|.........C
+        17 1d f7 ff fc ff 05 00 4d fe b3 1e 47 0a af 7f  ........M...G...
+        e8 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 fd c8 f6 0a c5 fc  ....@...........
+        6b 7c 00 00 00 00 00 00 00 00 00 95 22 01 12     k|..........".. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3798 [hci0] 2026-11-25 12:31:07.232348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 cb 43  .1Q~.|.........C
+        17 1d f8 ff fa ff 07 00 56 fe c0 1e 4b 0a 4b 8e  ........V...K.K.
+        e8 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 3e 89 88 ad 75 65  ....@.....>...ue
+        cd f5 00 00 00 00 00 00 00 00 00 43 a0 b6 48     ...........C..H 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3799 [hci0] 2026-11-25 12:31:07.232348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 cc 43  .1a~.|.........C
+        17 1d f7 ff f9 ff 06 00 55 fe c0 1e 5d 0a e6 9c  ........U...]...
+        e8 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 4a b1 ad f9 f0 b4  ....@.....J.....
+        2f 72 00 00 00 00 00 00 00 00 00 fe e3 a1 a0     /r............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3800 [hci0] 2026-11-25 12:31:07.232348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 cd 43  .1q~.|.........C
+        17 1d f6 ff fb ff 05 00 4c fe ba 1e 56 0a 6b c1  ........L...V.k.
+        e8 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 d6 fe 39 b0 86 e3  ....@.......9...
+        97 da 00 00 00 00 00 00 00 00 00 12 b4 e4 0f     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3801 [hci0] 2026-11-25 12:31:07.232348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 ce 43  .1.~.|.........C
+        17 1d f7 ff fb ff 05 00 4d fe b7 1e 56 0a f0 e5  ........M...V...
+        e8 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 e1 a7 95 9f 30 d7  ....@.........0.
+        f8 db 00 00 00 00 00 00 00 00 00 d6 81 89 ff     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3802 [hci0] 2026-11-25 12:31:07.242438
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 cf 43  .1.~.|.........C
+        17 1d f5 ff fb ff 05 00 4d fe b5 1e 53 0a 8c f4  ........M...S...
+        e8 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 f2 43 20 36 e1 cd  ....@......C 6..
+        4f fb 00 00 00 00 00 00 00 00 00 f9 9d 71 4d     O............qM 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3803 [hci0] 2026-11-25 12:31:07.242442
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7e 7f 7c 84 00 00 01 08 00 00 00 d0 43  .1.~.|.........C
+        17 1d f6 ff fd ff 05 00 4a fe b9 1e 4f 0a 28 03  ........J...O.(.
+        e9 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 8c 1e f5 a7 ac dd  ....@...........
+        d0 a8 00 00 00 00 00 00 00 00 00 13 b2 11 7c     ..............| 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3804 [hci0] 2026-11-25 12:31:07.242442
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 d1 43  .1.~.|.........C
+        17 1d f4 ff fa ff 07 00 4b fe b9 1e 57 0a c3 11  ........K...W...
+        e9 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c5 09 42 f6 bb 11  ....@.......B...
+        e3 e0 00 00 00 00 00 00 00 00 00 10 d3 d9 54     ..............T 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3805 [hci0] 2026-11-25 12:31:07.242443
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 d2 43  .1.~.|.........C
+        17 1d f4 ff fc ff 08 00 51 fe b6 1e 4f 0a 5f 20  ........Q...O._ 
+        e9 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 dd ce ae db 71 65  ....@.........qe
+        bc 48 00 00 00 00 00 00 00 00 00 64 0b 6c e7     .H.........d.l. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3806 [hci0] 2026-11-25 12:31:07.242443
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 d3 43  .1.~.|.........C
+        17 1d f4 ff fe ff 08 00 48 fe b3 1e 57 0a fb 2e  ........H...W...
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 56 7d 2e 33 5d a6  ....@.....V}.3].
+        1a 86 00 00 00 00 00 00 00 00 00 00 0c 3c 0a     .............<. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3807 [hci0] 2026-11-25 12:31:07.242443
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 d4 43  .1.~.|.........C
+        17 1d f4 ff f8 ff 07 00 4c fe be 1e 58 0a 96 3d  ........L...X..=
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 18 5d d2 c8 57 b3  ....@......]..W.
+        ca 51 00 00 00 00 00 00 00 00 00 e9 cf 06 96     .Q............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3808 [hci0] 2026-11-25 12:31:07.242443
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 f1 7e 7f 7c 84 00 00 01 08 00 00 00 d5 43  .1.~.|.........C
+        17 1d f4 ff f8 ff 08 00 47 fe bc 1e 6e 0a 32 4c  ........G...n.2L
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 65 af 85 15 7f f7  ....@.....e.....
+        2d ff 00 00 00 00 00 00 00 00 00 f9 b4 30 a4     -............0. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3809 [hci0] 2026-11-25 12:31:07.242443
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 01 7e 7f 7c 84 00 00 01 08 00 00 00 d6 43  .1.~.|.........C
+        17 1d f4 ff f9 ff 07 00 3d fe b4 1e 7b 0a ce 5a  ........=...{..Z
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 62 eb dd 9e 72 b3  ....@.....b...r.
+        2d c3 00 00 00 00 00 00 00 00 00 7b 8d e9 68     -..........{..h 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3810 [hci0] 2026-11-25 12:31:07.252355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 11 7e 7f 7c 84 00 00 01 08 00 00 00 d7 43  .1.~.|.........C
+        17 1d f3 ff fb ff 05 00 45 fe b2 1e 6b 0a 69 69  ........E...k.ii
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 da 7b fb 5b 2c e1  ....@......{.[,.
+        bb 12 00 00 00 00 00 00 00 00 00 00 d8 69 7e     .............i~ 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3811 [hci0] 2026-11-25 12:31:07.252359
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7e 7f 7c 84 00 00 01 08 00 00 00 d8 43  .1!~.|.........C
+        17 1d f4 ff fa ff 04 00 41 fe bc 1e 64 0a 05 78  ........A...d..x
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ed 6e e2 e0 ee 73  ....@......n...s
+        03 a2 00 00 00 00 00 00 00 00 00 dd f9 0c 45     ..............E 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3812 [hci0] 2026-11-25 12:31:07.252360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7e 7f 7c 84 00 00 01 08 00 00 00 d9 43  .11~.|.........C
+        17 1d f1 ff f7 ff 05 00 52 fe a9 1e 70 0a a1 86  ........R...p...
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 b0 d5 c2 ef 99 b7  ....@...........
+        5c 18 00 00 00 00 00 00 00 00 00 cd d2 01 03     \.............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3813 [hci0] 2026-11-25 12:31:07.252360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 da 43  .1A~.|.........C
+        17 1d f4 ff f9 ff 03 00 4f fe 9f 1e 77 0a 8a 9c  ........O...w...
+        e9 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 54 74 f0 1d 5b 8d  ....@.....Tt..[.
+        bb bd 00 00 00 00 00 00 00 00 00 0e 91 ca d6     ............... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3814 [hci0] 2026-11-25 12:31:07.252360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 db 43  .1Q~.|.........C
+        17 1d f3 ff fa ff 02 00 40 fe ac 1e 66 0a 73 b2  ........@...f.s.
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 13 21 03 f0 8f bd  ....@......!....
+        bf bd 00 00 00 00 00 00 00 00 00 be 21 a5 37     ............!.7 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3815 [hci0] 2026-11-25 12:31:07.252360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 dc 43  .1a~.|.........C
+        17 1d f2 ff f8 ff 01 00 39 fe b3 1e 65 0a 0f c1  ........9...e...
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 1a 3e 51 69 46 41  ....@......>QiFA
+        fe 5f 00 00 00 00 00 00 00 00 00 62 71 3b ad     ._.........bq;. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3816 [hci0] 2026-11-25 12:31:07.252360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 dd 43  .1q~.|.........C
+        17 1d f2 ff f4 ff 03 00 4c fe b8 1e 65 0a ab cf  ........L...e...
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 0e a5 fe 5f 83 79  ....@........_.y
+        9d 67 00 00 00 00 00 00 00 00 00 1d 40 73 d2     .g..........@s. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3817 [hci0] 2026-11-25 12:31:07.261353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 de 43  .1.~.|.........C
+        17 1d f4 ff f6 ff 02 00 45 fe af 1e 5f 0a 46 de  ........E..._.F.
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 4e cc 60 26 5a 13  ....@.....N.`&Z.
+        94 de 00 00 00 00 00 00 00 00 00 92 75 89 e1     ............u.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3818 [hci0] 2026-11-25 12:31:07.261356
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 df 43  .1.~.|.........C
+        17 1d f2 ff f8 ff 02 00 3f fe a2 1e 64 0a e2 ec  ........?...d...
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 0d 8a bb 47 75 96  ....@........Gu.
+        53 0c 00 00 00 00 00 00 00 00 00 11 b8 a3 b6     S.............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3819 [hci0] 2026-11-25 12:31:07.261357
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7e 7f 7c 84 00 00 01 08 00 00 00 e0 43  .1.~.|.........C
+        17 1d f4 ff f6 ff 02 00 40 fe aa 1e 6d 0a 7e fb  ........@...m.~.
+        e9 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 92 be 75 bf a9 eb  ....@.......u...
+        70 41 00 00 00 00 00 00 00 00 00 be 55 33 76     pA..........U3v 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3820 [hci0] 2026-11-25 12:31:07.261357
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 e1 43  .1.~.|.........C
+        17 1d f3 ff f8 ff 02 00 40 fe aa 1e 72 0a 19 0a  ........@...r...
+        ea 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c7 67 dc 15 bf ab  ....@......g....
+        c1 cf 00 00 00 00 00 00 00 00 00 4c 3f ba de     ...........L?.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3821 [hci0] 2026-11-25 12:31:07.261357
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 e2 43  .1.~.|.........C
+        17 1d f1 ff fa ff 01 00 2e fe b3 1e 76 0a b5 18  ............v...
+        ea 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 19 a4 a5 68 d9 5e  ....@........h.^
+        a7 6c 00 00 00 00 00 00 00 00 00 d5 61 72 ce     .l..........ar. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3822 [hci0] 2026-11-25 12:31:07.280351
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 e3 43  .1.~.|.........C
+        17 1d ef ff f7 ff 04 00 3d fe b9 1e 74 0a 51 27  ........=...t.Q'
+        ea 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 23 c0 b7 0d 9a e2  ....@.....#.....
+        91 81 00 00 00 00 00 00 00 00 00 b4 37 c7 d4     ............7.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3823 [hci0] 2026-11-25 12:31:07.280355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 e4 43  .1.~.|.........C
+        17 1d f4 ff f9 ff 01 00 48 fe ad 1e 70 0a 44 86  ........H...p.D.
+        ea 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 d9 01 93 02 c8 cc  ....@...........
+        cd a0 00 00 00 00 00 00 00 00 00 6f c1 88 8b     ...........o... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3824 [hci0] 2026-11-25 12:31:07.280355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 f1 7e 7f 7c 84 00 00 01 08 00 00 00 e5 43  .1.~.|.........C
+        17 1d f7 ff fb ff 01 00 65 fe ae 1e 63 0a 86 ec  ........e...c...
+        ea 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ac 80 c4 39 5f 6e  ....@........9_n
+        37 92 00 00 00 00 00 00 00 00 00 b4 d0 87 51     7.............Q 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3825 [hci0] 2026-11-25 12:31:07.280355
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 01 7e 7f 7c 84 00 00 01 08 00 00 00 e6 43  .1.~.|.........C
+        17 1d f7 ff fc ff 01 00 4b fe a9 1e 7c 0a 6f 02  ........K...|.o.
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 63 fe c7 5f 27 fe  ....@.....c.._'.
+        4c e6 00 00 00 00 00 00 00 00 00 9c 2b 46 c4     L...........+F. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3826 [hci0] 2026-11-25 12:31:07.289348
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 11 7e 7f 7c 84 00 00 01 08 00 00 00 e7 43  .1.~.|.........C
+        17 1d f8 ff fc ff 01 00 37 fe ab 1e 6c 0a 0b 11  ........7...l...
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 d3 ae 50 91 ec ef  ....@.......P...
+        76 a4 00 00 00 00 00 00 00 00 00 7b c4 45 97     v..........{.E. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3827 [hci0] 2026-11-25 12:31:07.289353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 21 7e 7f 7c 84 00 00 01 08 00 00 00 e8 43  .1!~.|.........C
+        17 1d fa ff fb ff 02 00 50 fe b2 1e 71 0a 42 2e  ........P...q.B.
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 7b b2 f7 05 41 74  ....@.....{...At
+        31 55 00 00 00 00 00 00 00 00 00 df ae 2b f2     1U...........+. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3828 [hci0] 2026-11-25 12:31:07.289353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 31 7e 7f 7c 84 00 00 01 08 00 00 00 e9 43  .11~.|.........C
+        17 1d fa ff fc ff 04 00 43 fe a6 1e 86 0a 7a 4b  ........C.....zK
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ba ba fa be c3 73  ....@..........s
+        20 8b 00 00 00 00 00 00 00 00 00 68 7f 6b 61      ..........h.ka 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3829 [hci0] 2026-11-25 12:31:07.289353
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 41 7e 7f 7c 84 00 00 01 08 00 00 00 ea 43  .1A~.|.........C
+        17 1d fb ff fd ff 03 00 4a fe b2 1e 7e 0a 15 5a  ........J...~..Z
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 38 10 38 95 ba 64  ....@.....8.8..d
+        8b d9 00 00 00 00 00 00 00 00 00 3b a7 d8 18     ...........;... 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3830 [hci0] 2026-11-25 12:31:07.289354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 51 7e 7f 7c 84 00 00 01 08 00 00 00 eb 43  .1Q~.|.........C
+        17 1d fa ff fb ff 05 00 49 fe ab 1e 78 0a b1 68  ........I...x..h
+        eb 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c0 9c 33 b1 5d 42  ....@.......3.]B
+        8d 24 00 00 00 00 00 00 00 00 00 cd 9d 16 dc     .$............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3831 [hci0] 2026-11-25 12:31:07.289354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 61 7e 7f 7c 84 00 00 01 08 00 00 00 ec 43  .1a~.|.........C
+        17 1d fd ff f9 ff 03 00 48 fe aa 1e 82 0a 4d 77  ........H.....Mw
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 ad 94 52 90 19 58  ....@.......R..X
+        a1 d1 00 00 00 00 00 00 00 00 00 5a 21 04 1b     ...........Z!.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3832 [hci0] 2026-11-25 12:31:07.289354
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 71 7e 7f 7c 84 00 00 01 08 00 00 00 ed 43  .1q~.|.........C
+        17 1d fd ff fc ff 06 00 56 fe b9 1e 7b 0a e8 85  ........V...{...
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c2 3b 64 55 aa 51  ....@......;dU.Q
+        b1 e3 00 00 00 00 00 00 00 00 00 2e 34 eb 9f     ............4.. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3833 [hci0] 2026-11-25 12:31:07.298342
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 81 7e 7f 7c 84 00 00 01 08 00 00 00 ee 43  .1.~.|.........C
+        17 1d fe ff fc ff 05 00 53 fe c5 1e 5e 0a 84 94  ........S...^...
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 db b5 7d 39 87 0a  ....@.......}9..
+        55 1b 00 00 00 00 00 00 00 00 00 18 78 73 fb     U...........xs. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3834 [hci0] 2026-11-25 12:31:07.298360
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 91 7e 7f 7c 84 00 00 01 08 00 00 00 ef 43  .1.~.|.........C
+        17 1d fe ff fb ff 05 00 48 fe b3 1e 63 0a 20 a3  ........H...c. .
+        eb 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 23 1b a1 67 05 a5  ....@.....#..g..
+        dc 7e 00 00 00 00 00 00 00 00 00 e9 1e a7 f8     .~............. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3835 [hci0] 2026-11-25 12:31:07.298367
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 a1 7e 7f 7c 84 00 00 01 08 00 00 00 f0 43  .1.~.|.........C
+        17 1d fe ff fd ff 04 00 4c fe bd 1e 78 0a bb b1  ........L...x...
+        eb 02 02 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 c8 e7 19 98 ea 0b  ....@...........
+        02 d1 00 00 00 00 00 00 00 00 00 fd 32 6a e3     ............2j. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3836 [hci0] 2026-11-25 12:31:07.298376
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 b1 7e 7f 7c 84 00 00 01 08 00 00 00 f1 43  .1.~.|.........C
+        17 1d 00 00 fe ff 04 00 56 fe b3 1e 83 0a 57 c0  ........V.....W.
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 00 36 77 cb c7 f4  ....@......6w...
+        65 16 00 00 00 00 00 00 00 00 00 aa e9 53 94     e............S. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3837 [hci0] 2026-11-25 12:31:07.298385
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 c1 7e 7f 7c 84 00 00 01 08 00 00 00 f2 43  .1.~.|.........C
+        17 1d ff ff fe ff 05 00 57 fe bd 1e 7e 0a f2 ce  ........W...~...
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 3f 74 93 81 7b 16  ....@.....?t..{.
+        13 11 00 00 00 00 00 00 00 00 00 b2 d8 9c 3c     ..............< 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3838 [hci0] 2026-11-25 12:31:07.298394
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 d1 7e 7f 7c 84 00 00 01 08 00 00 00 f3 43  .1.~.|.........C
+        17 1d ff ff fc ff 05 00 42 fe b4 1e 6e 0a 8e dd  ........B...n...
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 fd 2d 73 4e 50 97  ....@......-sNP.
+        17 d3 00 00 00 00 00 00 00 00 00 5a 11 74 09     ...........Z.t. 
+> BR-ACL: Handle... flags 0x02 dlen 83  #3839 [hci0] 2026-11-25 12:31:07.298403
+      Channel: 65 len 79 [PSM 19 mode Basic (0x00)] {chan 1}
+        a1 31 e1 7e 7f 7c 84 00 00 01 08 00 00 00 f4 43  .1.~.|.........C
+        17 1d ff ff fc ff 06 00 47 fe ad 1e 6f 0a 2a ec  ........G...o.*.
+        eb 02 03 80 00 00 00 80 00 00 00 00 00 09 00 00  ................
+        00 00 00 1c 40 08 04 00 00 00 10 d6 27 22 da d6  ....@.......'"..
+        d1 84 00 00 00 00 00 00 00 00 00 d3 d1 46 89     .............F. 

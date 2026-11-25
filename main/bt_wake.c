@@ -109,6 +109,8 @@ static bt_wake_press_cb_t s_cb;
 static int s_handover_delay_s = -1;
 static bt_drop_t s_handover_method = BT_DROP_RESET;
 static volatile int64_t s_handover_at_ms = -1;
+static bool s_accept_central = true;
+static int64_t s_drop_at_ms = -1;
 
 // Held connection
 static volatile uint16_t s_conn = 0xFFFF;
@@ -345,11 +347,14 @@ static void on_conn_request(const hci_rx_t *m)
     ESP_LOGI(TAG, "CONN_REQ t=%lld ms from %s cod=0x%06lX link=%u%s burst#%lu +%lld ms", t, a,
              (unsigned long)cod, link, is_pad ? " PAD" : "", (unsigned long)s_burst_count,
              is_pad ? t - s_burst_first_ms : 0);
+    if (is_pad && s_drop_at_ms >= 0) {
+        ESP_LOGI(TAG, "REPAGE after drop: +%lld ms", t - s_drop_at_ms);
+    }
 
     uint8_t r[7];
     addr_to_hci(addr, r);
     if (is_pad && link == 1 && accepting()) {
-        r[6] = 0x00; // become central, as BlueZ does (role switch)
+        r[6] = s_accept_central ? 0x00 : 0x01; // 0x00 role switch to central (as BlueZ)
         hci_cmd(OP_ACCEPT_CONN_REQ, r, 7, false);
         ESP_LOGI(TAG, "accepting %s", a);
     } else if (s_mode != BT_WAKE_SILENT) {
@@ -469,6 +474,10 @@ static void on_signalling(const uint8_t *p, uint16_t len, int64_t t)
             }
             break;
         }
+        case L2_DISC_RSP:
+            ESP_LOGI(TAG, "L2CAP disconnect rsp t=%lld dcid 0x%04X scid 0x%04X", t, le16(d),
+                     dlen >= 4 ? le16(&d[2]) : 0);
+            break;
         case L2_ECHO_REQ:
             sig_send(L2_ECHO_RSP, id, NULL, 0);
             break;
@@ -751,9 +760,29 @@ void bt_wake_set_handover(int delay_s, bt_drop_t method)
     s_handover_method = method;
 }
 
+void bt_wake_set_accept_central(bool central)
+{
+    s_accept_central = central;
+}
+
+esp_err_t bt_wake_detach(uint8_t reason)
+{
+    ESP_LOGI(TAG, "DROP t=%lld method detach reason 0x%02X, holding %s", now_ms(), reason,
+             s_conn != 0xFFFF ? "yes" : "no");
+    if (s_conn == 0xFFFF) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    s_drop_at_ms = now_ms();
+    uint8_t p[3];
+    put16(p, s_conn);
+    p[2] = reason;
+    return hci_cmd(OP_DISCONNECT, p, 3, false);
+}
+
 esp_err_t bt_wake_drop(bt_drop_t method)
 {
-    static const char *names[] = { "detach", "reset", "radio" };
+    static const char *names[] = { "detach", "reset", "radio", "l2cap" };
+    s_drop_at_ms = now_ms();
     ESP_LOGI(TAG, "DROP t=%lld method %s, holding %s", now_ms(), names[method],
              s_conn != 0xFFFF ? "yes" : "no");
     switch (method) {
@@ -777,6 +806,22 @@ esp_err_t bt_wake_drop(bt_drop_t method)
         s_radio_on = false;
         s_scanning = false;
         return esp_bt_controller_disable();
+    case BT_DROP_L2CAP: {
+        if (s_conn == 0xFFFF) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        // Interrupt first, then control: the order HID hosts use (HID spec 7.4.4).
+        for (int i = 1; i >= 0; i--) {
+            if (s_ch[i].open) {
+                uint8_t d[4];
+                put16(&d[0], s_ch[i].remote); // destination CID (the pad's)
+                put16(&d[2], s_ch[i].local);  // source CID (ours)
+                sig_send(L2_DISC_REQ, s_sig_id++, d, 4);
+                s_ch[i].open = false;
+            }
+        }
+        return ESP_OK;
+    }
     }
     return ESP_ERR_INVALID_ARG;
 }
@@ -824,7 +869,7 @@ void bt_wake_tick(void)
 void bt_wake_status_json(char *buf, size_t len)
 {
     static const char *modes[] = { "reject", "silent", "accept" };
-    static const char *drops[] = { "detach", "reset", "radio" };
+    static const char *drops[] = { "detach", "reset", "radio", "l2cap" };
     char h[18], p[18];
     fmt_addr(s_bdaddr_read, h);
     fmt_addr(s_pad, p);
