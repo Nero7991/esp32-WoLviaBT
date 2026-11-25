@@ -29,6 +29,12 @@
 #include "nvs_flash.h"
 
 #include "bringup.h"
+#if __has_include("esp_recover.h")
+#include "esp_recover.h"
+#define HAVE_RECOVER 1
+#else
+#define HAVE_RECOVER 0
+#endif
 #if __has_include("esp_power.h")
 #include "esp_power.h"
 #define HAVE_ESP_POWER 1
@@ -308,6 +314,13 @@ static void settings_seed(void)
     memset(b, 0, sizeof(b));
 }
 
+#if HAVE_RECOVER
+static const char *recover_trigger(void)
+{
+    return esp_recover_triggered() ? esp_recover_reason() : NULL;
+}
+#endif
+
 static const bringup_config_t s_setup = {
     .product = "WoL via BT",
     .ap_ssid_prefix = "WoLviaBT",
@@ -317,6 +330,10 @@ static const bringup_config_t s_setup = {
     .fields = s_fields,
     .n_fields = sizeof(s_fields) / sizeof(s_fields[0]),
     .on_seed = settings_seed,
+#if HAVE_RECOVER
+    .power_cycles = 255, // esp-recover counts them, from the first moments of app_main
+    .external_trigger = recover_trigger,
+#endif
 };
 
 // Magic packet as a raw Ethernet frame (EtherType 0x0842) to the broadcast address.
@@ -630,18 +647,23 @@ static esp_err_t eth_start(void)
 
 static esp_err_t status_get(httpd_req_t *req)
 {
-    char body[1152], m[18], bt[768] = "null";
+    char body[1408], m[18], bt[768] = "null", rec[200] = "null";
     if (s_bt_running) {
         bt_wake_status_json(bt, sizeof(bt));
     }
+#if HAVE_RECOVER
+    if (esp_recover_status_json(rec, sizeof(rec)) < 0) {
+        snprintf(rec, sizeof(rec), "null");
+    }
+#endif
     mac_str(s_target, m);
     snprintf(body, sizeof(body),
              "{\"app\":\"esp32-wol-via-bt\",\"version\":\"%s\",\"partition\":\"%s\","
              "\"ip\":\"%s\",\"eth_link\":%s,\"wol_target\":\"%s\",\"uptime_s\":%lld,"
-             "\"setup\":\"%s\",\"eth_power\":\"%s\",\"bt\":%s}\n",
+             "\"setup\":\"%s\",\"eth_power\":\"%s\",\"recover\":%s,\"bt\":%s}\n",
              ota_running_version(), ota_running_label(), s_ip, s_link_up ? "true" : "false",
              mac_is_set(s_target) ? m : "unset", (long long)(esp_timer_get_time() / 1000000),
-             bringup_active() ? bringup_reason() : "", s_ethp_names[s_ethp], bt);
+             bringup_active() ? bringup_reason() : "", s_ethp_names[s_ethp], rec, bt);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, body);
 }
@@ -851,6 +873,7 @@ static void http_start(void)
     ESP_LOGI(TAG, "POST /ota, /wol and /bt enabled; settings at /setup");
 }
 
+#if !HAVE_RECOVER
 // The board is usually out of reach, so a wedged HTTP server would cut off OTA for good. Every
 // 60 s fetch our own status page over loopback; after 3 failures in a row, restart. Skipped while
 // an OTA upload holds the (single-threaded) server.
@@ -900,6 +923,8 @@ static void http_selfcheck_task(void *arg)
     }
 }
 
+#endif
+
 // A freshly updated image is PENDING_VERIFY. It proves itself by getting an IP address
 // (with the HTTP server already up, so the next OTA can reach it). Otherwise roll back.
 static void selftest_task(void *arg)
@@ -938,6 +963,10 @@ void app_main(void)
         nvs = nvs_flash_init();
     }
     ESP_ERROR_CHECK(nvs);
+#if HAVE_RECOVER
+    // First, so a short plug-in still counts as a quick power cycle.
+    esp_recover_boot(&(esp_recover_config_t){ .quick_boots = 3, .window_s = 10 });
+#endif
     ESP_ERROR_CHECK(esp_netif_init());
     // Copies esp_log output into a RAM ring from here on; a host connects with
     // components/netserial/host/netserial.py <board-ip>.
@@ -969,7 +998,11 @@ void app_main(void)
     http_start();
     bt_start_from_nvs();
     xTaskCreate(host_watch_task, "host_watch", 3072, NULL, 4, NULL);
+#if HAVE_RECOVER
+    esp_recover_watch_http(80, "/", 60, 3, ota_is_busy);
+#else
     xTaskCreate(http_selfcheck_task, "http_check", 3072, NULL, 3, NULL);
+#endif
     if (ota_pending_verify()) {
         xTaskCreate(selftest_task, "ota_selftest", 4096, NULL, 5, NULL);
     }

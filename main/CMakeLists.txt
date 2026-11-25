@@ -3,8 +3,12 @@ set(reqs esp_eth esp_netif esp_event esp_http_server esp_timer driver lwip nvs_f
 # Optional, private components, used when checked out (or symlinked) under components/:
 #   components/esp-power         frequency scaling and GET /api/power
 #   components/esp-power-ledger  power-state counters (the component is one level down)
+#   components/esp-recover       power-cycle trigger counted early, reset history, liveness check
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../components/esp-power/CMakeLists.txt")
     list(APPEND reqs esp-power)
+endif()
+if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../components/esp-recover/CMakeLists.txt")
+    list(APPEND reqs esp-recover)
 endif()
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../components/esp-power-ledger/components/power_ledger")
     list(APPEND reqs power_ledger)

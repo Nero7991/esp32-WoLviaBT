@@ -101,8 +101,11 @@ to `http://192.168.4.1/setup`). Fill in the settings and press Save and restart.
 To move a configured board to another host (new Wi-Fi, new DualSense), get it back into setup
 mode in one of these ways:
 
-- power-cycle it 3 times in a row, each time unplugging within 10 s of plugging in, then plug it
-  in a fourth time and leave it;
+- power-cycle it 3 times in a row, each plug-in lasting about 2 s (it must be under 10 s), then
+  plug it in a fourth time and leave it. With the optional esp-recover component a plug-in is
+  counted 152 ms after power-on; the status JSON's `recover` field shows the count and the last
+  8 reset reasons (1 = power-on, 9 = brownout, 3 = software restart). Twice on the bench, one of
+  four plug-ins was not recorded at all (cause not determined); just repeat the sequence;
 - from the current network: `curl -u admin:<pw> -X POST 'http://<board>/api/setup/action?do=bringup'`;
 - if it cannot join its saved network, the hotspot comes up by itself after 5 failed attempts.
 
@@ -141,6 +144,8 @@ Optional, private components (the build works without them), used when present u
 - `components/esp-power`: frequency scaling and `/api/power`
 - `components/esp-power-ledger`: power-state counters, including the Ethernet power state, in
   `/api/power`
+- `components/esp-recover`: the power-cycle setup trigger counted early in boot, reset history,
+  and the HTTP self-check (without it, esp-bringup's own counter and a built-in self-check are used)
 
 The HTTP server purges the least recently used connection when full, and a self-check restarts
 the board if it stops answering for 3 minutes. Background: `docs/debugging/2026-11-25_httpd-socket-exhaustion.md`.

@@ -10,3 +10,4 @@ __pycache__/
 build-ledger/
 components/esp-power
 components/esp-power-ledger
+components/esp-recover

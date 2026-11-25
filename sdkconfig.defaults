@@ -21,3 +21,6 @@ CONFIG_LWIP_MAX_SOCKETS=16
 CONFIG_PM_ENABLE=y
 # Per-lock held time and time per CPU mode in /api/power.
 CONFIG_PM_PROFILING=y
+
+# Bootloader log at 115200 baud delays the app (and the power-cycle count) on every boot.
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
