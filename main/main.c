@@ -1,4 +1,4 @@
-// WT32-ETH01: bring up LAN8720 Ethernet and send a Wake-on-LAN magic packet.
+// WT32-ETH01: bring up LAN8720 Ethernet and send Wake-on-LAN magic packets on request.
 //
 // Board wiring (fixed on the WT32-ETH01):
 //   LAN8720 PHY address 1, MDC GPIO23, MDIO GPIO18,
@@ -18,8 +18,9 @@
 #include "esp_http_server.h"
 #include "esp_system.h"
 #include "esp_timer.h"
-#include "lwip/sockets.h"
 #include "ota.h"
+#include "ota_util.h"
+#include "nvs.h"
 #include "ota_httpd.h"
 #include "netserial.h"
 #include "nvs_flash.h"
@@ -41,12 +42,21 @@ static const char *TAG = "wol";
 #define PIN_MDIO       18
 
 static volatile bool s_got_ip;
+static volatile bool s_link_up;
 static char s_ip[16] = "none";
+static esp_eth_handle_t s_eth;
 
-__attribute__((unused)) static int parse_mac(const char *s, uint8_t out[6])
+// Target MAC: NVS ("wol"/"mac") overrides CONFIG_WOL_TARGET_MAC. All zeros means unset.
+static uint8_t s_target[6];
+
+#define NVS_NS  "wol"
+#define NVS_KEY "mac"
+
+static int parse_mac(const char *s, uint8_t out[6])
 {
     unsigned v[6];
-    if (sscanf(s, "%x:%x:%x:%x:%x:%x", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) != 6) {
+    char tail;
+    if (sscanf(s, "%x:%x:%x:%x:%x:%x%c", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &tail) != 6) {
         return -1;
     }
     for (int i = 0; i < 6; i++) {
@@ -58,43 +68,82 @@ __attribute__((unused)) static int parse_mac(const char *s, uint8_t out[6])
     return 0;
 }
 
-__attribute__((unused)) static esp_err_t wol_send(const uint8_t mac[6])
+static bool mac_is_set(const uint8_t m[6])
 {
-    uint8_t pkt[102];
-    memset(pkt, 0xff, 6);
+    static const uint8_t zero[6];
+    return memcmp(m, zero, 6) != 0;
+}
+
+static void mac_str(const uint8_t m[6], char out[18])
+{
+    snprintf(out, 18, "%02x:%02x:%02x:%02x:%02x:%02x", m[0], m[1], m[2], m[3], m[4], m[5]);
+}
+
+static void target_load(void)
+{
+    nvs_handle_t h;
+    size_t len = sizeof(s_target);
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        esp_err_t e = nvs_get_blob(h, NVS_KEY, s_target, &len);
+        nvs_close(h);
+        if (e == ESP_OK && len == 6) {
+            return;
+        }
+    }
+    if (parse_mac(CONFIG_WOL_TARGET_MAC, s_target) != 0) {
+        memset(s_target, 0, sizeof(s_target));
+    }
+}
+
+static esp_err_t target_save(const uint8_t m[6])
+{
+    nvs_handle_t h;
+    ESP_RETURN_ON_ERROR(nvs_open(NVS_NS, NVS_READWRITE, &h), TAG, "nvs_open");
+    esp_err_t e = nvs_set_blob(h, NVS_KEY, m, 6);
+    if (e == ESP_OK) {
+        e = nvs_commit(h);
+    }
+    nvs_close(h);
+    if (e == ESP_OK) {
+        memcpy(s_target, m, 6);
+    }
+    return e;
+}
+
+// Magic packet as a raw Ethernet frame (EtherType 0x0842) to the broadcast address.
+// Needs only the Ethernet link: no IP, DHCP or route, so it works when the target is off
+// and cannot leave through Wi-Fi.
+static esp_err_t wol_send(const uint8_t target[6])
+{
+    if (!s_eth) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (!s_link_up) {
+        ESP_LOGW(TAG, "magic packet not sent: ethernet link down");
+        return ESP_ERR_INVALID_STATE;
+    }
+    uint8_t frame[14 + 102];
+    memset(frame, 0xff, 6);                                  // dst: broadcast
+    ESP_RETURN_ON_ERROR(esp_eth_ioctl(s_eth, ETH_CMD_G_MAC_ADDR, &frame[6]), TAG, "own mac");
+    frame[12] = 0x08;                                        // EtherType 0x0842 (Wake-on-LAN)
+    frame[13] = 0x42;
+    uint8_t *p = &frame[14];
+    memset(p, 0xff, 6);
     for (int i = 0; i < 16; i++) {
-        memcpy(&pkt[6 + i * 6], mac, 6);
+        memcpy(&p[6 + i * 6], target, 6);
     }
-
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0) {
-        ESP_LOGE(TAG, "socket: errno %d", errno);
-        return ESP_FAIL;
-    }
-    int on = 1;
-    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
-
-    struct sockaddr_in dst = {
-        .sin_family = AF_INET,
-        .sin_port = htons(CONFIG_WOL_UDP_PORT),
-        .sin_addr.s_addr = htonl(INADDR_BROADCAST),
-    };
-    int n = sendto(sock, pkt, sizeof(pkt), 0, (struct sockaddr *)&dst, sizeof(dst));
-    close(sock);
-    if (n != sizeof(pkt)) {
-        ESP_LOGE(TAG, "sendto: %d, errno %d", n, errno);
-        return ESP_FAIL;
-    }
-    ESP_LOGI(TAG, "magic packet sent to %02x:%02x:%02x:%02x:%02x:%02x",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    ESP_RETURN_ON_ERROR(esp_eth_transmit(s_eth, frame, sizeof(frame)), TAG, "transmit");
+    char m[18];
+    mac_str(target, m);
+    ESP_LOGI(TAG, "magic packet sent to %s", m);
     return ESP_OK;
 }
 
 static void on_eth_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     switch (id) {
-    case ETHERNET_EVENT_CONNECTED:    ESP_LOGI(TAG, "link up"); break;
-    case ETHERNET_EVENT_DISCONNECTED: ESP_LOGI(TAG, "link down"); break;
+    case ETHERNET_EVENT_CONNECTED:    s_link_up = true;  ESP_LOGI(TAG, "link up"); break;
+    case ETHERNET_EVENT_DISCONNECTED: s_link_up = false; ESP_LOGI(TAG, "link down"); break;
     default: break;
     }
 }
@@ -105,19 +154,6 @@ static void on_got_ip(void *arg, esp_event_base_t base, int32_t id, void *data)
     ESP_LOGI(TAG, "ip " IPSTR " gw " IPSTR, IP2STR(&ev->ip_info.ip), IP2STR(&ev->ip_info.gw));
     snprintf(s_ip, sizeof(s_ip), IPSTR, IP2STR(&ev->ip_info.ip));
     s_got_ip = true;
-
-#if CONFIG_WOL_SEND_ON_BOOT
-    static bool sent;
-    uint8_t mac[6];
-    if (!sent) {
-        sent = true;
-        if (parse_mac(CONFIG_WOL_TARGET_MAC, mac) == 0) {
-            wol_send(mac);
-        } else {
-            ESP_LOGE(TAG, "bad CONFIG_WOL_TARGET_MAC: %s", CONFIG_WOL_TARGET_MAC);
-        }
-    }
-#endif
 }
 
 static esp_err_t eth_start(void)
@@ -147,6 +183,7 @@ static esp_err_t eth_start(void)
     esp_eth_config_t cfg = ETH_DEFAULT_CONFIG(mac, phy);
     esp_eth_handle_t eth = NULL;
     ESP_RETURN_ON_ERROR(esp_eth_driver_install(&cfg, &eth), TAG, "driver install");
+    s_eth = eth;
 
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     esp_netif_t *netif = esp_netif_new(&netif_cfg);
@@ -191,14 +228,62 @@ static void wifi_start(void)
 
 static esp_err_t status_get(httpd_req_t *req)
 {
-    char body[192];
+    char body[256], m[18];
+    mac_str(s_target, m);
     snprintf(body, sizeof(body),
              "{\"app\":\"esp32-wol-via-bt\",\"version\":\"%s\",\"partition\":\"%s\","
-             "\"ip\":\"%s\",\"uptime_s\":%lld}\n",
-             ota_running_version(), ota_running_label(), s_ip,
-             (long long)(esp_timer_get_time() / 1000000));
+             "\"ip\":\"%s\",\"eth_link\":%s,\"wol_target\":\"%s\",\"uptime_s\":%lld}\n",
+             ota_running_version(), ota_running_label(), s_ip, s_link_up ? "true" : "false",
+             mac_is_set(s_target) ? m : "unset", (long long)(esp_timer_get_time() / 1000000));
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, body);
+}
+
+// POST /wol?mac=aa:bb:cc:dd:ee:ff  stores the target MAC in NVS (does not send).
+// POST /wol                        sends a magic packet to the stored target.
+// Same HTTP Basic credentials as /ota.
+static esp_err_t wol_post(httpd_req_t *req)
+{
+    char hdr[256];
+    size_t hl = httpd_req_get_hdr_value_len(req, "Authorization");
+    if (hl == 0 || hl >= sizeof(hdr) ||
+        httpd_req_get_hdr_value_str(req, "Authorization", hdr, sizeof(hdr)) != ESP_OK ||
+        !ota_basic_auth_ok(hdr, CONFIG_OTA_USER, CONFIG_OTA_PASSWORD)) {
+        httpd_resp_set_status(req, "401 Unauthorized");
+        httpd_resp_set_hdr(req, "WWW-Authenticate", "Basic realm=\"wol\"");
+        return httpd_resp_sendstr(req, "Unauthorized\n");
+    }
+
+    char query[64], val[32];
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+        httpd_query_key_value(query, "mac", val, sizeof(val)) == ESP_OK) {
+        uint8_t m[6];
+        if (parse_mac(val, m) != 0 || !mac_is_set(m)) {
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "mac must be aa:bb:cc:dd:ee:ff");
+            return ESP_OK;
+        }
+        if (target_save(m) != ESP_OK) {
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS write failed");
+            return ESP_OK;
+        }
+        char ms[18];
+        mac_str(m, ms);
+        ESP_LOGI(TAG, "wol target set to %s", ms);
+        httpd_resp_sendstr(req, "target saved\n");
+        return ESP_OK;
+    }
+
+    if (!mac_is_set(s_target)) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "no target: POST /wol?mac=... first");
+        return ESP_OK;
+    }
+    esp_err_t e = wol_send(s_target);
+    if (e != ESP_OK) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        httpd_resp_sendstr(req, s_link_up ? "send failed\n" : "ethernet link down\n");
+        return ESP_OK;
+    }
+    return httpd_resp_sendstr(req, "magic packet sent\n");
 }
 
 static void http_start(void)
@@ -216,7 +301,9 @@ static void http_start(void)
         return;
     }
     ESP_ERROR_CHECK(ota_httpd_register(server, CONFIG_OTA_USER, CONFIG_OTA_PASSWORD));
-    ESP_LOGI(TAG, "POST /ota enabled");
+    static const httpd_uri_t wol = { .uri = "/wol", .method = HTTP_POST, .handler = wol_post };
+    ESP_ERROR_CHECK(httpd_register_uri_handler(server, &wol));
+    ESP_LOGI(TAG, "POST /ota and POST /wol enabled");
 }
 
 // A freshly updated image is PENDING_VERIFY. It proves itself by getting an IP address
@@ -257,6 +344,7 @@ void app_main(void)
         nvs = nvs_flash_init();
     }
     ESP_ERROR_CHECK(nvs);
+    target_load();
     ESP_ERROR_CHECK(esp_netif_init());
     // Copies esp_log output into a RAM ring from here on; a host connects with
     // components/netserial/host/netserial.py <board-ip>.

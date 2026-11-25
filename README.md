@@ -7,9 +7,9 @@ The BC-250 is an AMD mining card repurposed as a Steam gaming box. It cannot wak
 controller when it is powered off, because its Bluetooth and USB are unpowered or asleep. This
 board stays powered all the time, listens for the controller over Bluetooth, and wakes the box.
 
-Status: firmware runs on the board with OTA updates, rollback and a network console (netserial).
-OTA and rollback are tested over Wi-Fi. Ethernet link and the Wake-on-LAN packet are not yet
-tested on hardware. Bluetooth detection is not written.
+Status: firmware runs on the board with OTA updates, rollback, a network console (netserial) and
+an HTTP-triggered Wake-on-LAN. A wake from power-off was tested on 2026-11-25 against the BC-250 on
+the bench (see "Wake test" below). Bluetooth detection is not written.
 
 ## What the board does
 
@@ -44,9 +44,9 @@ Requirements on the BC-250 side:
 - Wake-on-LAN must be enabled on the wired interface and persist across boots
   (`ethtool -s enp4s0 wol g`). The interface reports support for magic-packet wake, but it is
   currently disabled.
-- The firmware and BIOS must honor the magic packet in the power state the box is left in. This
-  is untested on the BC-250.
-- The USB port feeding the board must stay powered in that state. Also untested.
+- The firmware and BIOS must honor the magic packet in the power state the box is left in.
+  Confirmed from power-off on the bench BC-250 on 2026-11-25; not yet on the basement unit.
+- The USB port feeding the board must stay powered in that state. Confirmed on the bench BC-250.
 
 ## Scenario 2: ATX supply switched by the board
 
@@ -111,6 +111,30 @@ curl http://<board-ip>/          # version, running slot, ip, uptime
 - `components/ota` is a copy of the OTA component from `esp32-s3-dw3110` (branch `anchor-survey`,
   last component change `cc42d07`). `components/netserial` is a git submodule; clone with
   `--recursive` or run `git submodule update --init`.
+
+### Wake-on-LAN
+
+The magic packet is a raw Ethernet frame (broadcast, EtherType 0x0842) sent with
+`esp_eth_transmit`. It needs only the Ethernet link: no IP address, DHCP or route, so it works
+while the target is off and cannot leave through Wi-Fi.
+
+```
+curl -u admin:<pw> -X POST 'http://<board-ip>/wol?mac=aa:bb:cc:dd:ee:ff'   # store target in NVS
+curl -u admin:<pw> -X POST  http://<board-ip>/wol                          # send magic packet
+```
+
+The stored MAC survives reboots and OTA; `CONFIG_WOL_TARGET_MAC` is only the default. `GET /` shows
+`eth_link` and `wol_target`.
+
+### Wake test (2026-11-25, bench BC-250, board powered from its USB port)
+
+- Send path: each `POST /wol` raised `enp4s0` `rx_packets` by exactly 1 (3 of 3); 0 with no send.
+- `sudo ethtool -s enp4s0 wol g` (r8169, supports `pumbg`, was `d`), then `systemctl poweroff`.
+- With the BC-250 off for 2.5 min the board stayed up (uptime continuous) and the Ethernet link
+  stayed up: **the USB port stays powered in the off state** on this supply.
+- Magic packet at 11:24:16; BC-250 answered ping at 11:24:52 (36 s), ssh `up 0 min`.
+- `ethtool ... wol g` does not survive a boot. The target needs it made persistent (udev rule or
+  systemd unit) before relying on this.
 
 ### Over serial (first flash, or recovery)
 

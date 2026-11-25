@@ -4,18 +4,8 @@ menu "WoL via BT"
         string "MAC address of the machine to wake"
         default "00:00:00:00:00:00"
         help
-            Wired MAC of the BC-250 (enp4s0), as aa:bb:cc:dd:ee:ff.
-
-    config WOL_SEND_ON_BOOT
-        bool "Send one magic packet after Ethernet gets an IP"
-        default n
-        help
-            Test hook for the Ethernet and WoL path before Bluetooth detection exists.
-            Off by default so a board reset does not wake the target.
-
-    config WOL_UDP_PORT
-        int "UDP port for the magic packet"
-        default 9
+            Default wired MAC of the machine to wake, as aa:bb:cc:dd:ee:ff. A MAC set at
+            runtime with POST /wol?mac=... is stored in NVS and takes precedence.
 
 endmenu
 
