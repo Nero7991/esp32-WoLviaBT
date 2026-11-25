@@ -1,6 +1,6 @@
-# esp32s3-WoLviaBT
+# esp32-WoLviaBT
 
-Firmware for an ESP32 Ethernet board that turns on a BC-250 gaming box when the PS button on a
+Firmware for a WT32-ETH01 (ESP32 with Ethernet) that turns on a BC-250 gaming box when the PS button on a
 PlayStation controller is pressed.
 
 The BC-250 is an AMD mining card repurposed as a Steam gaming box. It cannot wake itself from a
@@ -56,14 +56,15 @@ This is the more complicated scenario and may be tested later.
   on, and releases it to turn the rail off.
 - The BC-250 is set to power on automatically when 12 V appears, so turning the supply on boots
   the box.
-- The board is also connected to a BC-250 USB port (D+ and D-) so it can tell whether the BC-250
-  is alive.
+- The board also needs a way to tell whether the BC-250 is alive. The original plan was a USB
+  data connection (D+ and D-), but this chip has no native USB (see Hardware). Candidates: sense
+  the 5 V of a BC-250 USB port on a GPIO, watch the Ethernet link, or ping the box.
 
 Behavior:
 
 1. Idle: the supply is off, only 5VSB is live, the board is listening for the PS button.
 2. PS button pressed: the board pulls PS_ON low, 12 V comes up, the BC-250 boots.
-3. Running: the board watches the USB connection to confirm the BC-250 is alive.
+3. Running: the board keeps checking that the BC-250 is alive.
 4. Shutdown, either of:
    - The board sees the BC-250 has been down for 1 minute and releases PS_ON, removing 12 V.
    - Software on the BC-250 tells the board to cut power in a given number of minutes.
@@ -72,33 +73,13 @@ Behavior:
 ATX 5VSB (purple) ---------> ESP32 Ethernet board (always on)
 ESP32 GPIO --switch--> ATX PS_ON (green) to GND
 ATX 12 V ---------> BC-250 (auto power on)
-BC-250 USB (D+, D-) <------> ESP32 (alive monitoring, shutdown requests)
+BC-250 USB 5 V ---divider---> ESP32 GPIO (alive monitoring, one candidate)
+BC-250 <--Ethernet--> ESP32 (shutdown requests, ping)
 ```
 
 ## Open questions
 
 These need answers before or during implementation. None has been verified.
-
-### Which chip: the board name and the repo name disagree
-
-The WT32-ETH01 is built around the original ESP32 (WT32-S1 module, LAN8720 Ethernet PHY), not an
-ESP32-S3. The difference matters for both halves of this project:
-
-| Need | ESP32 (WT32-ETH01) | ESP32-S3 |
-|---|---|---|
-| Bluetooth Classic (BR/EDR), which DualShock 4 and DualSense controllers use | Yes | No, BLE only |
-| Native USB on D+ and D- (scenario 2 monitoring) | No | Yes |
-| Ethernet | LAN8720 on the board | Depends on the board, often W5500 over SPI |
-
-So a PlayStation controller points to the original ESP32, and USB D+/D- monitoring points to the
-ESP32-S3. One board cannot do both as described. Options:
-
-- Use the WT32-ETH01 (ESP32) and detect that the BC-250 is alive another way in scenario 2: sense
-  the 5 V on a BC-250 USB port with a GPIO, watch the Ethernet link, or ping the box.
-- Use an ESP32-S3 Ethernet board and a controller that speaks BLE.
-- Confirm which board is actually on hand, then rename the repo if it is not an S3.
-
-Scenario 1 needs only Bluetooth and Ethernet, so the WT32-ETH01 covers it.
 
 ### How the PS button press is detected
 
@@ -125,13 +106,25 @@ BC-250 takes to boot has not been measured.
 - Cutting 12 V removes power without a clean shutdown. The 1 minute "down" rule has to
   distinguish a box that has shut down from one that is rebooting, sitting in the BIOS, or
   suspended.
-- The way the BC-250 asks for a delayed power cut (USB serial, a network request to the board)
+- Which alive check to use is not decided. Sensing USB 5 V is simple but only shows that the
+  rail is up, not that the system is running; a ping shows the system is up but fails during
+  boot and in the BIOS.
+- The BC-250 would ask for a delayed power cut with a network request to the board. The protocol
   is not decided.
 - Whether the BC-250's auto power on setting works reliably with this supply is untested.
 
 ## Hardware
 
-- ESP32 Ethernet board (see the chip question above).
+- **WT32-ETH01**: Wireless-Tag board with a WT32-S1 module, which is an original ESP32 (not an
+  ESP32-S3), and a LAN8720 Ethernet PHY.
+  - It has Bluetooth Classic (BR/EDR), which DualShock 4 and DualSense controllers use. An
+    ESP32-S3 has BLE only and could not hear these controllers.
+  - It has no native USB, so it cannot appear as a USB device to the BC-250. USB is used for
+    power only.
 - BC-250 board with its ATX power supply.
 - A PlayStation controller, paired with the BC-250.
-- Scenario 2 only: a transistor or open-drain driver for PS_ON, and a USB cable to the BC-250.
+- Scenario 2 only: a transistor or open-drain driver for PS_ON, and a resistor divider if USB 5 V
+  is sensed on a GPIO.
+
+This repo was first created as `esp32s3-WoLviaBT` on the assumption that the board was an
+ESP32-S3; it was renamed once the module was read as WT32-S1.
