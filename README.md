@@ -183,3 +183,7 @@ BC-250 takes to boot has not been measured.
 
 This repo was first created as `esp32s3-WoLviaBT` on the assumption that the board was an
 ESP32-S3; it was renamed once the module was read as WT32-S1.
+
+## License
+
+MIT. See `LICENSE`.
