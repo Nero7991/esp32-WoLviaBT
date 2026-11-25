@@ -1,284 +1,43 @@
 # esp32-WoLviaBT
 
-Firmware for a WT32-ETH01 (ESP32 with Ethernet) that turns on a BC-250 gaming box when the PS button on a
-PlayStation controller is pressed.
+Press the PS button on a DualSense and a powered-off BC-250 gaming box turns on.
 
-The BC-250 is an AMD mining card repurposed as a Steam gaming box. It cannot wake itself from a
-controller when it is powered off, because its Bluetooth and USB are unpowered or asleep. This
-board stays powered all the time, listens for the controller over Bluetooth, and wakes the box.
+A WT32-ETH01 (ESP32 with Ethernet) stays powered from one of the box's USB ports. It listens for
+the controller over Bluetooth by taking on the box's own adapter address, and on a press sends a
+Wake-on-LAN packet over the Ethernet cable. A second press then connects the pad to the box as
+usual.
 
-Status: firmware runs on the board with OTA updates, rollback, a network console (netserial) and
-an HTTP-triggered Wake-on-LAN. A wake from power-off was tested on 2026-11-25 against the BC-250 on
-the bench (see "Wake test" below). Bluetooth detection is not written.
+## Status
 
-## What the board does
+- **Working and tested on two BC-250s (2026-11-25):**
+  - wake on a PS press, including from Ethernet powered down;
+  - wake over HTTP;
+  - setup page with controller Detect;
+  - OTA updates with rollback;
+  - network console.
+- **Not possible:** waking and connecting with a single press needs the board to be the box's
+  Bluetooth adapter itself; see [docs/design-s31-adapter.md](docs/design-s31-adapter.md) (ESP32-S31,
+  planned).
 
-1. It is always powered from 5 V (a USB port or the ATX standby rail).
-2. It listens for a PS button press on a paired controller.
-3. On a press it powers the BC-250 on. How it does that depends on the wiring scenario below.
+## Documentation
 
-## Scenario 1: ATX supply always on, wake by Wake-on-LAN
-
-This is the first scenario to build.
-
-- The ATX supply is forced on permanently: the green wire (PS_ON) is jumpered to ground, so the
-  BC-250 always has 12 V.
-- Because the BC-250 always has power, its USB ports are powered. The board takes its 5 V from one
-  of them.
-- The board's Ethernet port is on the same LAN as the BC-250's wired port.
-- On a PS button press the board sends a Wake-on-LAN magic packet to the BC-250's wired MAC
-  address.
-
-```
-ATX supply (PS_ON jumpered to GND) --12 V--> BC-250
-BC-250 USB port --5 V--> ESP32 Ethernet board
-ESP32 Ethernet board --Ethernet--> LAN <--Ethernet-- BC-250
-
-PS button --Bluetooth--> ESP32 --magic packet--> BC-250 wakes
-```
-
-Requirements on the BC-250 side:
-
-- The onboard Ethernet port must be cabled. At the time of writing the box runs on a USB Wi-Fi
-  adapter and the wired port is unplugged.
-- Wake-on-LAN must be enabled on the wired interface and persist across boots
-  (`ethtool -s enp4s0 wol g`). The interface reports support for magic-packet wake, but it is
-  currently disabled.
-- The firmware and BIOS must honor the magic packet in the power state the box is left in.
-  Confirmed from power-off on the bench BC-250 on 2026-11-25; not yet on the basement unit.
-- The USB port feeding the board must stay powered in that state. Confirmed on the bench BC-250.
-
-## Scenario 2: ATX supply switched by the board
-
-This is the more complicated scenario and may be tested later.
-
-- The board runs from the ATX supply's 5 V standby rail (5VSB, the purple wire), which is live
-  whenever the supply has mains power.
-- The board controls the supply: it pulls the green wire (PS_ON) to ground to turn the 12 V rail
-  on, and releases it to turn the rail off.
-- The BC-250 is set to power on automatically when 12 V appears, so turning the supply on boots
-  the box.
-- The board also needs a way to tell whether the BC-250 is alive. The original plan was a USB
-  data connection (D+ and D-), but this chip has no native USB (see Hardware). Candidates: sense
-  the 5 V of a BC-250 USB port on a GPIO, watch the Ethernet link, or ping the box.
-
-Behavior:
-
-1. Idle: the supply is off, only 5VSB is live, the board is listening for the PS button.
-2. PS button pressed: the board pulls PS_ON low, 12 V comes up, the BC-250 boots.
-3. Running: the board keeps checking that the BC-250 is alive.
-4. Shutdown, either of:
-   - The board sees the BC-250 has been down for 1 minute and releases PS_ON, removing 12 V.
-   - Software on the BC-250 tells the board to cut power in a given number of minutes.
-
-```
-ATX 5VSB (purple) ---------> ESP32 Ethernet board (always on)
-ESP32 GPIO --switch--> ATX PS_ON (green) to GND
-ATX 12 V ---------> BC-250 (auto power on)
-BC-250 USB 5 V ---divider---> ESP32 GPIO (alive monitoring, one candidate)
-BC-250 <--Ethernet--> ESP32 (shutdown requests, ping)
-```
-
-## Setting up a board (first boot or a new host)
-
-Settings live on the board and are edited at `http://<board>/setup`
-([esp-bringup](https://github.com/Nero7991/esp-bringup), a submodule in `components/esp-bringup`).
-
-| Setting | Where to get it |
+| Document | Contents |
 |---|---|
-| Wi-Fi network and password | the network the board should join |
-| Device name | optional |
-| Admin password | protects `/setup`, `/ota`, `/wol`, `/bt` (user `admin`), 8+ characters |
-| Host Bluetooth adapter | on the host: `bluetoothctl show` |
-| Controller address | press Detect, then either put the pad in pairing mode (PS + Create until it flashes fast) or press PS with the host's Bluetooth off; or `bluetoothctl devices Paired` on the host |
-| Controller link key | optional, accept-mode experiments only: `/var/lib/bluetooth/<adapter>/<pad>/info` |
-| Host wired MAC | the host's Ethernet MAC, the port cabled to this board |
+| [Setup guide](docs/setup-guide.md) | Wiring, preparing the host, first-boot setup, Detect, moving the board, recovery |
+| [How it works](docs/how-it-works.md) | PS press detection, host check, wake path, hardware, future PS_ON wiring |
+| [Power](docs/power.md) | Ethernet power-down, CPU frequency scaling, why there is no light sleep |
+| [HTTP API](docs/http-api.md) | Status, setup, wake, Bluetooth and OTA endpoints |
+| [Building and flashing](docs/building.md) | Toolchain, OTA, serial flashing, optional components |
+| [DualSense behaviour](docs/dualsense-bt-behaviour.md) | Everything measured about the controller's reconnect, with captures |
+| [RPi flasher wiring](docs/wiring-rpi-flasher.md) | Flashing over serial from a Raspberry Pi |
+| [Debugging records](docs/debugging/) | Root-caused issues, with the dead ends |
 
-A board with any required setting empty starts in **setup mode**: it opens the WPA2 hotspot
-`WoLviaBT-XXXX` (password `wolviabt`). Join it with a phone; the setup page opens by itself (or go
-to `http://192.168.4.1/setup`). Fill in the settings and press Save and restart.
+## Quick start
 
-To move a configured board to another host (new Wi-Fi, new DualSense), get it back into setup
-mode in one of these ways:
-
-- power-cycle it 3 times in a row, each plug-in lasting about 2 s (it must be under 10 s), then
-  plug it in a fourth time and leave it. With the optional esp-recover component a plug-in is
-  counted 152 ms after power-on; the status JSON's `recover` field shows the count and the last
-  8 reset reasons (1 = power-on, 9 = brownout, 3 = software restart). Twice on the bench, one of
-  four plug-ins was not recorded at all (cause not determined); just repeat the sequence;
-- from the current network: `curl -u admin:<pw> -X POST 'http://<board>/api/setup/action?do=bringup'`;
-- if it cannot join its saved network, the hotspot comes up by itself after 5 failed attempts.
-
-In setup mode the board also keeps joining its saved network if it has one, so it stays reachable
-there. A Save with "restart" (or `?do=reboot`) leaves setup mode.
-
-On the host, enable Wake-on-LAN on the wired port permanently, e.g. with NetworkManager:
-`nmcli con add type ethernet ifname <if> con-name wol-link ipv4.method link-local
-ipv6.method link-local 802-3-ethernet.wake-on-lan magic` (the board checks whether the host is up
-by pinging `ff02::1` on that link, so it only needs the link up, no IPv4).
-
-## Power
-
-The board's largest steady loads are the LAN8720 Ethernet chip and its 50 MHz oscillator. While
-the host is off (setting "Turn Ethernet off while the host is off", on by default), both are
-powered down. They come back up for a 10 s host check every `eth_poll` seconds (default 30), and
-at once on a PS press. Measured on the bench:
-- with 30 s settings, Ethernet was on about 25 % of the time while the host was off;
-- press to magic packet took about 3.3 s, including link negotiation.
-
-Ethernet stays on for `eth_grace` seconds (default 300) after the host goes off, which covers
-reboots, and for 3 minutes after a wake.
-
-The trade-off: if the host is started some other way, the board can think it is still off for up
-to `eth_poll` seconds. A press in that window is answered by the board, and the pad gives up. The
-press also brings Ethernet up, so the next press connects normally.
-
-Light sleep is not possible on this board. The Ethernet MAC driver holds an APB_FREQ_MAX lock
-from install to uninstall, and the BR/EDR controller forbids light sleep without a 32 kHz crystal.
-With the optional `esp-power` component the CPU scales between 80 and 160 MHz instead of a fixed
-160: about 93 % of the time at 80 MHz. `GET /api/power` shows the PM locks and the time per CPU
-mode.
-
-Optional, private components (the build works without them), used when present under
-`components/`, e.g. as symlinks:
-- `components/esp-power`: frequency scaling and `/api/power`
-- `components/esp-power-ledger`: power-state counters, including the Ethernet power state, in
-  `/api/power`
-- `components/esp-recover`: the power-cycle setup trigger counted early in boot, reset history,
-  and the HTTP self-check (without it, esp-bringup's own counter and a built-in self-check are used)
-
-The HTTP server purges the least recently used connection when full, and a self-check restarts
-the board if it stops answering for 3 minutes. Background: `docs/debugging/2026-11-25_httpd-socket-exhaustion.md`.
-
-## Building and flashing
-
-Toolchain: ESP-IDF v5.5.6 at `~/esp/v5.5.6/esp-idf` (shared with quickvolt). That install is
-registered for esp32c6 only, so `export.sh` does not put the Xtensa compiler on PATH; add it by
-hand. The global `PYTHONPATH` on this machine also has to be unset first.
-
-```
-unset PYTHONPATH
-. ~/esp/v5.5.6/esp-idf/export.sh
-export PATH="$HOME/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/bin:$PATH"
-idf.py menuconfig        # "WoL via BT": target MAC, optional send-on-boot test
-idf.py build
-idf.py -p /dev/ttyUSBx flash monitor
-```
-
-### Over the network (normal path)
-
-```
-tools/ota_push.sh <board-ip>     # uploads build/esp32-wol-via-bt.bin to POST /ota, then checks GET /
-python3 -I components/netserial/host/netserial.py <board-ip> --log run.log   # network console
-curl http://<board-ip>/          # version, running slot, ip, uptime
-```
-
-- `POST /ota` uses HTTP Basic auth, user `admin`, with the admin password from `/setup`.
-  `CONFIG_OTA_PASSWORD` in the git-ignored `sdkconfig.local` only seeds it on a board that has
-  none.
-- A new image must get an IP address within 120 s or the bootloader rolls back to the previous
-  slot. Tested 2026-11-25: a deliberately network-less image rolled back after about 2 min.
-- Wi-Fi comes from the `/setup` settings. The git-ignored `main/wifi_creds_local.h`, if present,
-  only seeds them on a board that has none. Ethernet is always on.
-- `components/ota` is a copy of the OTA component from `esp32-s3-dw3110` (branch `anchor-survey`,
-  last component change `cc42d07`). `components/netserial` is a git submodule; clone with
-  `--recursive` or run `git submodule update --init`.
-
-### Wake-on-LAN
-
-The magic packet is a raw Ethernet frame (broadcast, EtherType 0x0842) sent with
-`esp_eth_transmit`. It needs only the Ethernet link: no IP address, DHCP or route, so it works
-while the target is off and cannot leave through Wi-Fi.
-
-```
-curl -u admin:<pw> -X POST 'http://<board-ip>/wol?mac=aa:bb:cc:dd:ee:ff'   # same as the /setup field
-curl -u admin:<pw> -X POST  http://<board-ip>/wol                          # send magic packet
-```
-
-The stored MAC survives reboots and OTA; `CONFIG_WOL_TARGET_MAC` is only the default. `GET /` shows
-`eth_link` and `wol_target`.
-
-### Wake test (2026-11-25, bench BC-250, board powered from its USB port)
-
-- Send path: each `POST /wol` raised `enp4s0` `rx_packets` by exactly 1 (3 of 3); 0 with no send.
-- `sudo ethtool -s enp4s0 wol g` (r8169, supports `pumbg`, was `d`), then `systemctl poweroff`.
-- With the BC-250 off for 2.5 min the board stayed up (uptime continuous) and the Ethernet link
-  stayed up: **the USB port stays powered in the off state** on this supply.
-- Magic packet at 11:24:16; BC-250 answered ping at 11:24:52 (36 s), ssh `up 0 min`.
-- `ethtool ... wol g` does not survive a boot. The target needs it made persistent (udev rule or
-  systemd unit) before relying on this.
-
-### Over serial (first flash, or recovery)
-
-The WT32-ETH01 has no USB. Flash it through an external USB-serial adapter set to 3.3 V logic, or through the Raspberry
-Pi `cu-rpi4` as in `docs/wiring-rpi-flasher.md`:
-
-| Adapter | WT32-ETH01 |
-|---|---|
-| TX | RXD (GPIO3) |
-| RX | TXD (GPIO1) |
-| GND | GND |
-| 5V | 5V (the 3V3 pin of a cheap adapter cannot feed the PHY) |
-| GND | IO0, only while flashing |
-
-There is no auto-reset circuit. Tie IO0 to GND, power-cycle or pulse EN to GND, flash, then
-remove the IO0 jumper and reset. GPIO0 is also the RMII clock input; the 50 MHz oscillator stays
-off until firmware drives GPIO16 high, which is why strapping IO0 low at boot is safe.
-
-Ethernet: LAN8720, PHY address 1, MDC GPIO23, MDIO GPIO18, oscillator enable GPIO16, clock in
-on GPIO0.
-
-## Open questions
-
-These need answers before or during implementation. None has been verified.
-
-### How the PS button press is detected
-
-A PlayStation controller does not broadcast a button press. When the PS button is pressed on a
-controller that is off, it tries to reconnect to the host it was last paired with. Two ways to use
-that:
-
-- The board presents itself with the Bluetooth address of the BC-250's own adapter, so the
-  controller's reconnect attempt reaches the board. The board treats the attempt as the wake
-  signal and does not complete the connection, leaving the controller free to connect to the
-  BC-250 once it is up. This depends on timing and on the controller retrying long enough.
-- The controller is paired with the board itself. Detection is simple, but the controller is then
-  paired to the wrong host for gaming.
-
-The first approach is the intended one. Whether a controller keeps retrying for as long as the
-BC-250 takes to boot has not been measured.
-
-### Scenario 2 details
-
-- PS_ON must be switched with an open-drain output or a transistor, never driven high from a
-  3.3 V GPIO.
-- 5VSB current is limited (typically 2 to 3 A on a modern supply); the board's draw is small, but
-  confirm nothing else hangs on that rail.
-- Cutting 12 V removes power without a clean shutdown. The 1 minute "down" rule has to
-  distinguish a box that has shut down from one that is rebooting, sitting in the BIOS, or
-  suspended.
-- Which alive check to use is not decided. Sensing USB 5 V is simple but only shows that the
-  rail is up, not that the system is running; a ping shows the system is up but fails during
-  boot and in the BIOS.
-- The BC-250 would ask for a delayed power cut with a network request to the board. The protocol
-  is not decided.
-- Whether the BC-250's auto power on setting works reliably with this supply is untested.
-
-## Hardware
-
-- **WT32-ETH01**: Wireless-Tag board with a WT32-S1 module, which is an original ESP32 (not an
-  ESP32-S3), and a LAN8720 Ethernet PHY.
-  - It has Bluetooth Classic (BR/EDR), which DualShock 4 and DualSense controllers use. An
-    ESP32-S3 has BLE only and could not hear these controllers.
-  - It has no native USB, so it cannot appear as a USB device to the BC-250. USB is used for
-    power only.
-- BC-250 board with its ATX power supply.
-- A PlayStation controller, paired with the BC-250.
-- Scenario 2 only: a transistor or open-drain driver for PS_ON, and a resistor divider if USB 5 V
-  is sensed on a GPIO.
-
-This repo was first created as `esp32s3-WoLviaBT` on the assumption that the board was an
-ESP32-S3; it was renamed once the module was read as WT32-S1.
+1. Build and flash once over serial ([building](docs/building.md)).
+2. Power the board from a USB port of the box, and cable its Ethernet to the box's wired port.
+3. Join the `WoLviaBT-XXXX` hotspot (password `wolviabt`) and fill in the setup page
+   ([setup guide](docs/setup-guide.md)).
 
 ## License
 

@@ -40,7 +40,7 @@ In both cases the pad **did not page again** after the attempt ended. One press 
 Connection Request. The pad stays awake while its connection attempt is pending, so the board can
 hold it for at most 29 s by not answering, and then it turns itself off.
 
-The bench BC-250 needs 36 s from the magic packet to answering ping (WoL test, README), and more until
+The bench BC-250 needs 36 s from the magic packet to answering ping (wake tests in how-it-works.md), and more until
 `bluetoothd` is up, so even the 29 s hold is not enough for the pad to connect to the real adapter by
 itself. A second press is needed today.
 
