@@ -19,6 +19,7 @@
 #include "esp_http_server.h"
 #include "esp_system.h"
 #include "esp_timer.h"
+#include "esp_mac.h"
 #include "ota.h"
 #include "ota_util.h"
 #include "nvs.h"
@@ -187,32 +188,36 @@ static uint8_t nvs_get_byte(const char *key, uint8_t def)
 
 static void on_press(void);
 
-// "Detect" for the controller: listen as the host's adapter and list whatever pages it. A pad
-// pages the host it is paired with, so this needs the host adapter address and the real host
-// must not answer first (off, or its Bluetooth off).
+// "Detect" for the controller, two ways at once:
+// - a PS press: a paired pad pages its host's adapter, so the board answers as that address
+//   (needs the host adapter address, and the real host must not answer first);
+// - pairing mode (PS + Create until the light flashes fast): the pad is discoverable and an
+//   inquiry finds it with its name, whatever host it belongs to.
+static bool s_detect_pages; // the PS-press path is live (board answers as the form's host)
+
 static esp_err_t pad_detect_start(const char *key, const bringup_values_t *form, char *err,
                                   size_t errlen)
 {
     char v[24];
     uint8_t host[6], cur[6];
-    if (!bringup_values_get(form, "bt_host", v, sizeof(v)) || parse_mac(v, host) != 0) {
-        snprintf(err, errlen, "Enter the host Bluetooth adapter address first.");
-        return ESP_ERR_INVALID_STATE;
-    }
+    bool have_host = bringup_values_get(form, "bt_host", v, sizeof(v)) && parse_mac(v, host) == 0;
     if (bt_wake_host(cur)) {
-        if (memcmp(cur, host, 6) != 0) {
-            snprintf(err, errlen, "The new host adapter address takes effect after a restart. "
-                                  "Save, then detect again.");
-            return ESP_ERR_INVALID_STATE;
-        }
+        s_detect_pages = have_host && memcmp(cur, host, 6) == 0;
     } else {
+        uint8_t addr[6];
+        if (have_host) {
+            memcpy(addr, host, 6);
+        } else {
+            esp_read_mac(addr, ESP_MAC_BT); // our own address: pairing mode only
+        }
         static const uint8_t none[6] = { 0 };
-        esp_err_t e = bt_wake_start(host, none, NULL, BT_WAKE_REJECT, on_press);
+        esp_err_t e = bt_wake_start(addr, none, NULL, BT_WAKE_REJECT, on_press);
         if (e != ESP_OK) {
             snprintf(err, errlen, "Bluetooth did not start: %s", esp_err_to_name(e));
             return e;
         }
         s_bt_running = true;
+        s_detect_pages = have_host;
     }
     bt_wake_learn(true);
     return ESP_OK;
@@ -225,6 +230,9 @@ static void pad_detect_poll(const char *key, bringup_detect_result_t *out)
     out->state = bt_wake_learning() ? BRINGUP_DETECT_WAITING : BRINGUP_DETECT_FAILED;
     if (out->state == BRINGUP_DETECT_FAILED) {
         snprintf(out->message, sizeof(out->message), "Stopped listening.");
+    } else if (!s_detect_pages) {
+        snprintf(out->message, sizeof(out->message),
+                 "Pairing mode only: save the host adapter address to also catch a PS press");
     }
     for (int i = 0; i < n; i++) {
         const uint8_t *a = seen[i].addr;
@@ -232,14 +240,11 @@ static void pad_detect_poll(const char *key, bringup_detect_result_t *out)
         bool pad = ((cod >> 8) & 0x1F) == 0x05 && ((cod >> 2) & 0x0F) == 0x02; // peripheral/gamepad
         snprintf(out->found[i].value, sizeof(out->found[i].value),
                  "%02x:%02x:%02x:%02x:%02x:%02x", a[0], a[1], a[2], a[3], a[4], a[5]);
-        if (pad) {
-            snprintf(out->found[i].label, sizeof(out->found[i].label), "Game controller, %u %s",
-                     seen[i].count, seen[i].count == 1 ? "request" : "requests");
-        } else {
-            snprintf(out->found[i].label, sizeof(out->found[i].label),
-                     "Other device (class %06lx), %u %s", (unsigned long)cod, seen[i].count,
-                     seen[i].count == 1 ? "request" : "requests");
-        }
+        const char *how = seen[i].paged && seen[i].inquiry ? "PS press and pairing mode"
+                        : seen[i].paged                    ? "PS press"
+                                                           : "pairing mode";
+        const char *what = seen[i].name[0] ? seen[i].name : pad ? "Game controller" : "Other device";
+        snprintf(out->found[i].label, sizeof(out->found[i].label), "%.36s, %s", what, how);
     }
     out->n = (uint8_t)n;
 }
@@ -252,8 +257,9 @@ static void pad_detect_stop(const char *key)
 static const bringup_detect_t s_pad_detect = {
     .button = "Detect",
     .title = "Find the controller",
-    .prompt = "Turn the host off (or switch its Bluetooth off), then press the PS button on the "
-              "controller. It must already be paired with this host.",
+    .prompt = "Either put the controller in pairing mode (hold PS and Create until the light "
+              "flashes fast), or, if it is paired with this host, turn the host's Bluetooth off "
+              "and press PS.",
     .timeout_s = 60,
     .start = pad_detect_start,
     .poll = pad_detect_poll,
@@ -265,7 +271,7 @@ static const bringup_field_t s_fields[] = {
       .help = "The host's adapter address: bluetoothctl show", .type = BRINGUP_T_MAC,
       .required = true },
     { .key = "bt_pad", .label = "Controller address", .group = "Bluetooth",
-      .help = "The DualSense paired with the host. Detect finds it when you press PS.",
+      .help = "The DualSense paired with the host. Detect finds it in pairing mode or on a PS press.",
       .type = BRINGUP_T_MAC, .required = true, .detect = &s_pad_detect },
     { .key = "bt_lk", .label = "Controller link key", .group = "Bluetooth",
       .help = "Only for the accept-mode experiments. From /var/lib/bluetooth/<adapter>/<pad>/info",
@@ -393,13 +399,16 @@ static void on_ping_ok(esp_ping_handle_t h, void *arg)
     s_host_ping_ok_ms = esp_timer_get_time() / 1000;
 }
 
-static void on_got_ip6(void *arg, esp_event_base_t base, int32_t id, void *data)
+// The ping session is created once the link-local address is valid and deleted when Ethernet
+// powers down: a session stopped across an Ethernet stop/start never sends again (seen on
+// 2026-11-25: after a power-down the board brought the link up, did DAD and a router
+// solicitation, and sent no echo requests).
+static void ping_session_start(void)
 {
-    const ip_event_got_ip6_t *ev = data;
-    if (ev->esp_netif != s_eth_netif || s_ping) {
+    esp_ip6_addr_t ll;
+    if (s_ping || !s_link_up || esp_netif_get_ip6_linklocal(s_eth_netif, &ll) != ESP_OK) {
         return;
     }
-    ESP_LOGI(TAG, "ethernet ipv6 " IPV6STR, IPV62STR(ev->ip6_info.ip));
     esp_ping_config_t pc = ESP_PING_DEFAULT_CONFIG();
     pc.target_addr.type = IPADDR_TYPE_V6;
     pc.target_addr.u_addr.ip6.addr[0] = PP_HTONL(0xff020000UL);
@@ -411,11 +420,34 @@ static void on_got_ip6(void *arg, esp_event_base_t base, int32_t id, void *data)
     pc.timeout_ms = 1000;
     pc.interface = esp_netif_get_netif_impl_index(s_eth_netif);
     esp_ping_callbacks_t cb = { .on_ping_success = on_ping_ok };
-    if (esp_ping_new_session(&pc, &cb, &s_ping) == ESP_OK && esp_ping_start(s_ping) == ESP_OK) {
+    esp_ping_handle_t h = NULL;
+    if (esp_ping_new_session(&pc, &cb, &h) == ESP_OK && esp_ping_start(h) == ESP_OK) {
+        s_ping = h;
         ESP_LOGI(TAG, "host check: pinging ff02::1 on ethernet");
     } else {
         ESP_LOGE(TAG, "host check: ping session failed");
+        if (h) {
+            esp_ping_delete_session(h);
+        }
     }
+}
+
+static void ping_session_stop(void)
+{
+    if (s_ping) {
+        esp_ping_stop(s_ping);
+        esp_ping_delete_session(s_ping);
+        s_ping = NULL;
+    }
+}
+
+static void on_got_ip6(void *arg, esp_event_base_t base, int32_t id, void *data)
+{
+    const ip_event_got_ip6_t *ev = data;
+    if (ev->esp_netif != s_eth_netif) {
+        return;
+    }
+    ESP_LOGI(TAG, "ethernet ipv6 " IPV6STR, IPV62STR(ev->ip6_info.ip));
 }
 
 // ---- Ethernet power ----
@@ -453,14 +485,9 @@ static void eth_power(bool on)
         gpio_set_level(PIN_OSC_ENABLE, 1);
         vTaskDelay(pdMS_TO_TICKS(10));
         s_phy->pwrctl(s_phy, true);
-        esp_eth_start(s_eth);
-        if (s_ping) {
-            esp_ping_start(s_ping);
-        }
+        esp_eth_start(s_eth); // the watch loop starts a ping session once link-local is valid
     } else {
-        if (s_ping) {
-            esp_ping_stop(s_ping);
-        }
+        ping_session_stop();
         esp_eth_stop(s_eth);
         s_link_up = false;
         s_phy->pwrctl(s_phy, false);
@@ -537,6 +564,9 @@ static void host_watch_task(void *arg)
             s_host_seen_ms = now;
         }
         xSemaphoreTake(s_eth_mx, portMAX_DELAY);
+        if (s_ethp != ETHP_OFF) {
+            ping_session_start(); // no-op while running, or until link and address are ready
+        }
         switch (s_ethp) {
         case ETHP_ON:
             if (s_eth_save && !up && now - s_host_seen_ms > (int64_t)s_eth_grace_s * 1000 &&

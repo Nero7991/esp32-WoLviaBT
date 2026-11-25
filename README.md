@@ -90,7 +90,7 @@ Settings live on the board and are edited at `http://<board>/setup`
 | Device name | optional |
 | Admin password | protects `/setup`, `/ota`, `/wol`, `/bt` (user `admin`), 8+ characters |
 | Host Bluetooth adapter | on the host: `bluetoothctl show` |
-| Controller address | press Detect, then the PS button (host off or its Bluetooth off); or `bluetoothctl devices Paired` on the host |
+| Controller address | press Detect, then either put the pad in pairing mode (PS + Create until it flashes fast) or press PS with the host's Bluetooth off; or `bluetoothctl devices Paired` on the host |
 | Controller link key | optional, accept-mode experiments only: `/var/lib/bluetooth/<adapter>/<pad>/info` |
 | Host wired MAC | the host's Ethernet MAC, the port cabled to this board |
 

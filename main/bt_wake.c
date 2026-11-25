@@ -30,6 +30,9 @@ static const char *TAG = "bt_wake";
 #define ACCEPT_TIMEOUT_SILENT  0xB540 // 29 s, the spec maximum
 
 // HCI opcodes
+#define OP_INQUIRY                0x0401
+#define OP_INQUIRY_CANCEL         0x0402
+#define OP_WRITE_INQUIRY_MODE     0x0C45
 #define OP_ACCEPT_CONN_REQ        0x0409
 #define OP_REJECT_CONN_REQ        0x040A
 #define OP_LINK_KEY_REPLY         0x040B
@@ -48,6 +51,10 @@ static const char *TAG = "bt_wake";
 #define OP_READ_BD_ADDR           0x1009
 
 // HCI events
+#define EV_INQ_COMPLETE    0x01
+#define EV_INQ_RESULT      0x02
+#define EV_INQ_RESULT_RSSI 0x22
+#define EV_EXT_INQ_RESULT  0x2F
 #define EV_CONN_COMPLETE   0x03
 #define EV_CONN_REQUEST    0x04
 #define EV_DISCONN_COMPL   0x05
@@ -289,6 +296,8 @@ static esp_err_t controller_setup(void)
     uint16_t to = s_mode == BT_WAKE_SILENT ? ACCEPT_TIMEOUT_SILENT : ACCEPT_TIMEOUT_DEFAULT;
     uint8_t top[2] = { to & 0xFF, to >> 8 };
     if (e == ESP_OK) e = hci_cmd(OP_WRITE_CONN_ACCEPT_TO, top, 2, true);
+    uint8_t inq_mode = 0x02; // inquiry results with RSSI or extended data (carries the name)
+    if (e == ESP_OK) e = hci_cmd(OP_WRITE_INQUIRY_MODE, &inq_mode, 1, true);
     if (e == ESP_OK) e = hci_cmd(OP_READ_BD_ADDR, NULL, 0, true);
     s_init_phase = false;
     s_scanning = false; // reset turned it off
@@ -331,6 +340,104 @@ static bool accepting(void)
     return s_mode == BT_WAKE_ACCEPT && s_have_key && s_conn == 0xFFFF;
 }
 
+// Record a device seen in learn mode. name may be NULL.
+static void learn_add(const uint8_t addr[6], uint32_t cod, bool paged, int8_t rssi,
+                      const char *name)
+{
+    taskENTER_CRITICAL(&s_seen_lock);
+    int i = 0;
+    while (i < s_nseen && memcmp(s_seen[i].addr, addr, 6) != 0) {
+        i++;
+    }
+    if (i == s_nseen && s_nseen < LEARN_MAX) {
+        memset(&s_seen[i], 0, sizeof(s_seen[i]));
+        memcpy(s_seen[i].addr, addr, 6);
+        s_nseen++;
+    }
+    if (i < s_nseen) {
+        bt_wake_seen_t *e = &s_seen[i];
+        e->cod = cod;
+        e->count++;
+        if (paged) {
+            e->paged = true;
+        } else {
+            e->inquiry = true;
+            if (rssi) {
+                e->rssi = rssi;
+            }
+            if (name && name[0]) {
+                snprintf(e->name, sizeof(e->name), "%s", name);
+            }
+        }
+    }
+    taskEXIT_CRITICAL(&s_seen_lock);
+}
+
+// Inquiry: General Inquiry Access Code, 6 x 1.28 s, unlimited responses. Restarted on completion
+// while learning.
+static void inquiry_start(void)
+{
+    static const uint8_t p[5] = { 0x33, 0x8B, 0x9E, 0x06, 0x00 };
+    hci_cmd(OP_INQUIRY, p, 5, false);
+}
+
+// Extended inquiry data: [len][type][data...]; 0x09 complete name, 0x08 shortened name.
+static void eir_name(const uint8_t *eir, int n, char *out, size_t olen)
+{
+    out[0] = '\0';
+    for (int i = 0; i + 1 < n && eir[i]; i += eir[i] + 1) {
+        int l = eir[i], t = eir[i + 1];
+        if ((t == 0x09 || t == 0x08) && l >= 2) {
+            int nl = l - 1;
+            if (i + 2 + nl > n) {
+                nl = n - i - 2; // truncated by our receive buffer
+            }
+            if (nl <= 0) {
+                return;
+            }
+            size_t k = 0;
+            for (int j = 0; j < nl && k + 1 < olen; j++) {
+                uint8_t c = eir[i + 2 + j];
+                out[k++] = (c >= 0x20 && c < 0x7F && c != '"' && c != '\\') ? (char)c : '?';
+            }
+            out[k] = '\0';
+            if (t == 0x09) {
+                return;
+            }
+        }
+    }
+}
+
+static void on_inquiry_result(const hci_rx_t *m)
+{
+    const uint8_t *d = m->data;
+    int n = m->len < sizeof(m->data) ? m->len : (int)sizeof(m->data);
+    uint8_t ev = d[1], addr[6];
+    if (n < 16 || d[3] < 1) {
+        return;
+    }
+    addr_from_hci(&d[4], addr); // first response only (controllers send one per event)
+    uint32_t cod;
+    int8_t rssi = 0;
+    char name[32] = "";
+    if (ev == EV_INQ_RESULT) { // addr, psrm, reserved 2, cod, clock offset
+        cod = d[13] | (d[14] << 8) | (d[15] << 16);
+    } else {                   // addr, psrm, reserved 1, cod, clock offset, rssi [, eir]
+        if (n < 18) {
+            return;
+        }
+        cod = d[12] | (d[13] << 8) | (d[14] << 16);
+        rssi = (int8_t)d[17];
+        if (ev == EV_EXT_INQ_RESULT && n > 18) {
+            eir_name(&d[18], n - 18, name, sizeof(name));
+        }
+    }
+    char a[18];
+    fmt_addr(addr, a);
+    ESP_LOGI(TAG, "INQUIRY %s cod=0x%06lX rssi %d name \"%s\"", a, (unsigned long)cod, rssi, name);
+    learn_add(addr, cod, false, rssi, name);
+}
+
 static void on_conn_request(const hci_rx_t *m)
 {
     const uint8_t *p = &m->data[3];
@@ -344,21 +451,7 @@ static void on_conn_request(const hci_rx_t *m)
     s_requests++;
 
     if (s_learn) {
-        taskENTER_CRITICAL(&s_seen_lock);
-        int i = 0;
-        while (i < s_nseen && memcmp(s_seen[i].addr, addr, 6) != 0) {
-            i++;
-        }
-        if (i == s_nseen && s_nseen < LEARN_MAX) {
-            memcpy(s_seen[i].addr, addr, 6);
-            s_seen[i].count = 0;
-            s_nseen++;
-        }
-        if (i < s_nseen) {
-            s_seen[i].cod = cod;
-            s_seen[i].count++;
-        }
-        taskEXIT_CRITICAL(&s_seen_lock);
+        learn_add(addr, cod, true, 0, NULL);
         ESP_LOGI(TAG, "LEARN t=%lld ms %s cod=0x%06lX", t, a, (unsigned long)cod);
         uint8_t rj[7];
         addr_to_hci(addr, rj);
@@ -643,6 +736,18 @@ static void on_event(const hci_rx_t *m)
     uint8_t a6[6], r[22];
     char a[18];
     switch (ev) {
+    case EV_INQ_RESULT:
+    case EV_INQ_RESULT_RSSI:
+    case EV_EXT_INQ_RESULT:
+        if (s_learn) {
+            on_inquiry_result(m);
+        }
+        return;
+    case EV_INQ_COMPLETE:
+        if (s_learn) {
+            inquiry_start();
+        }
+        return;
     case EV_CONN_REQUEST:
         if (m->len >= 13) {
             on_conn_request(m);
@@ -957,10 +1062,16 @@ void bt_wake_learn(bool on)
         taskEXIT_CRITICAL(&s_seen_lock);
         s_learn_poll_ms = now_ms();
     }
-    if (on != s_learn) {
-        ESP_LOGI(TAG, "learn mode %s", on ? "ON" : "OFF");
-    }
+    bool was = s_learn;
     s_learn = on;
+    if (on != was) {
+        ESP_LOGI(TAG, "learn mode %s", on ? "ON" : "OFF");
+        if (on) {
+            inquiry_start();
+        } else {
+            hci_cmd(OP_INQUIRY_CANCEL, NULL, 0, false);
+        }
+    }
     apply_scan();
 }
 
