@@ -108,6 +108,15 @@ static volatile bool s_host_up;
 static volatile int64_t s_host_down_at_ms = -1;
 static bool s_scanning;
 static bt_wake_press_cb_t s_cb;
+static bool s_started;
+
+#define LEARN_MAX 6
+#define LEARN_IDLE_MS 20000
+static volatile bool s_learn;
+static volatile int64_t s_learn_poll_ms;
+static bt_wake_seen_t s_seen[LEARN_MAX];
+static int s_nseen;
+static portMUX_TYPE s_seen_lock = portMUX_INITIALIZER_UNLOCKED;
 
 static int s_handover_delay_s = -1;
 static bt_drop_t s_handover_method = BT_DROP_RESET;
@@ -291,7 +300,7 @@ static void apply_scan(void)
     if (!s_radio_on) {
         return;
     }
-    bool want = s_policy == BT_SCAN_ON || (s_policy == BT_SCAN_AUTO && !s_host_up);
+    bool want = s_learn || s_policy == BT_SCAN_ON || (s_policy == BT_SCAN_AUTO && !s_host_up);
     if (want == s_scanning) {
         return;
     }
@@ -333,6 +342,30 @@ static void on_conn_request(const hci_rx_t *m)
     char a[18];
     fmt_addr(addr, a);
     s_requests++;
+
+    if (s_learn) {
+        taskENTER_CRITICAL(&s_seen_lock);
+        int i = 0;
+        while (i < s_nseen && memcmp(s_seen[i].addr, addr, 6) != 0) {
+            i++;
+        }
+        if (i == s_nseen && s_nseen < LEARN_MAX) {
+            memcpy(s_seen[i].addr, addr, 6);
+            s_seen[i].count = 0;
+            s_nseen++;
+        }
+        if (i < s_nseen) {
+            s_seen[i].cod = cod;
+            s_seen[i].count++;
+        }
+        taskEXIT_CRITICAL(&s_seen_lock);
+        ESP_LOGI(TAG, "LEARN t=%lld ms %s cod=0x%06lX", t, a, (unsigned long)cod);
+        uint8_t rj[7];
+        addr_to_hci(addr, rj);
+        rj[6] = 0x0F;
+        hci_cmd(OP_REJECT_CONN_REQ, rj, 7, false);
+        return;
+    }
 
     bool is_pad = memcmp(addr, s_pad, 6) == 0;
     if (is_pad) {
@@ -762,6 +795,7 @@ esp_err_t bt_wake_start(const uint8_t host[6], const uint8_t pad[6], const uint8
     if (memcmp(host, s_bdaddr_read, 6) != 0) {
         ESP_LOGE(TAG, "BD_ADDR override did not take effect");
     }
+    s_started = true;
     apply_scan();
     return ESP_OK;
 }
@@ -912,8 +946,50 @@ void bt_wake_set_host_up(bool up)
     }
 }
 
+void bt_wake_learn(bool on)
+{
+    if (!s_started) {
+        return;
+    }
+    if (on) {
+        taskENTER_CRITICAL(&s_seen_lock);
+        s_nseen = 0;
+        taskEXIT_CRITICAL(&s_seen_lock);
+        s_learn_poll_ms = now_ms();
+    }
+    if (on != s_learn) {
+        ESP_LOGI(TAG, "learn mode %s", on ? "ON" : "OFF");
+    }
+    s_learn = on;
+    apply_scan();
+}
+
+bool bt_wake_learning(void) { return s_learn; }
+
+int bt_wake_learned(bt_wake_seen_t *out, int max)
+{
+    s_learn_poll_ms = now_ms();
+    taskENTER_CRITICAL(&s_seen_lock);
+    int n = s_nseen < max ? s_nseen : max;
+    memcpy(out, s_seen, n * sizeof(*out));
+    taskEXIT_CRITICAL(&s_seen_lock);
+    return n;
+}
+
+bool bt_wake_host(uint8_t out[6])
+{
+    if (s_started) {
+        memcpy(out, s_host, 6);
+    }
+    return s_started;
+}
+
 void bt_wake_tick(void)
 {
+    if (s_learn && now_ms() - s_learn_poll_ms > LEARN_IDLE_MS) {
+        ESP_LOGI(TAG, "learn mode idle");
+        bt_wake_learn(false);
+    }
     int64_t at = s_handover_at_ms;
     if (at >= 0 && now_ms() >= at) {
         s_handover_at_ms = -1;

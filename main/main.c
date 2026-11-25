@@ -29,6 +29,20 @@
 #include "nvs_flash.h"
 
 #include "bringup.h"
+#if __has_include("esp_power.h")
+#include "esp_power.h"
+#define HAVE_ESP_POWER 1
+#else
+#define HAVE_ESP_POWER 0
+#endif
+#include "freertos/semphr.h"
+#if __has_include("power_ledger.h")
+#include "power_ledger.h"
+#define HAVE_LEDGER 1
+#else
+#define HAVE_LEDGER 0
+#endif
+#include "lwip/sockets.h"
 
 // Optional, git-ignored: build-time Wi-Fi credentials used only to seed the settings on a board
 // that has none (see settings_seed).
@@ -47,6 +61,7 @@ static volatile bool s_got_ip;
 static volatile bool s_link_up;
 static char s_ip[16] = "none";
 static esp_eth_handle_t s_eth;
+static esp_eth_phy_t *s_phy;
 static esp_netif_t *s_eth_netif;
 static volatile int64_t s_host_ping_ok_ms = -1;
 static esp_ping_handle_t s_ping;
@@ -164,19 +179,102 @@ static uint8_t nvs_get_byte(const char *key, uint8_t def)
 
 #define SET_NS "wolbt"
 
+static void on_press(void);
+
+// "Detect" for the controller: listen as the host's adapter and list whatever pages it. A pad
+// pages the host it is paired with, so this needs the host adapter address and the real host
+// must not answer first (off, or its Bluetooth off).
+static esp_err_t pad_detect_start(const char *key, const bringup_values_t *form, char *err,
+                                  size_t errlen)
+{
+    char v[24];
+    uint8_t host[6], cur[6];
+    if (!bringup_values_get(form, "bt_host", v, sizeof(v)) || parse_mac(v, host) != 0) {
+        snprintf(err, errlen, "Enter the host Bluetooth adapter address first.");
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (bt_wake_host(cur)) {
+        if (memcmp(cur, host, 6) != 0) {
+            snprintf(err, errlen, "The new host adapter address takes effect after a restart. "
+                                  "Save, then detect again.");
+            return ESP_ERR_INVALID_STATE;
+        }
+    } else {
+        static const uint8_t none[6] = { 0 };
+        esp_err_t e = bt_wake_start(host, none, NULL, BT_WAKE_REJECT, on_press);
+        if (e != ESP_OK) {
+            snprintf(err, errlen, "Bluetooth did not start: %s", esp_err_to_name(e));
+            return e;
+        }
+        s_bt_running = true;
+    }
+    bt_wake_learn(true);
+    return ESP_OK;
+}
+
+static void pad_detect_poll(const char *key, bringup_detect_result_t *out)
+{
+    bt_wake_seen_t seen[BRINGUP_DETECT_MAX];
+    int n = bt_wake_learned(seen, BRINGUP_DETECT_MAX);
+    out->state = bt_wake_learning() ? BRINGUP_DETECT_WAITING : BRINGUP_DETECT_FAILED;
+    if (out->state == BRINGUP_DETECT_FAILED) {
+        snprintf(out->message, sizeof(out->message), "Stopped listening.");
+    }
+    for (int i = 0; i < n; i++) {
+        const uint8_t *a = seen[i].addr;
+        uint32_t cod = seen[i].cod;
+        bool pad = ((cod >> 8) & 0x1F) == 0x05 && ((cod >> 2) & 0x0F) == 0x02; // peripheral/gamepad
+        snprintf(out->found[i].value, sizeof(out->found[i].value),
+                 "%02x:%02x:%02x:%02x:%02x:%02x", a[0], a[1], a[2], a[3], a[4], a[5]);
+        if (pad) {
+            snprintf(out->found[i].label, sizeof(out->found[i].label), "Game controller, %u %s",
+                     seen[i].count, seen[i].count == 1 ? "request" : "requests");
+        } else {
+            snprintf(out->found[i].label, sizeof(out->found[i].label),
+                     "Other device (class %06lx), %u %s", (unsigned long)cod, seen[i].count,
+                     seen[i].count == 1 ? "request" : "requests");
+        }
+    }
+    out->n = (uint8_t)n;
+}
+
+static void pad_detect_stop(const char *key)
+{
+    bt_wake_learn(false);
+}
+
+static const bringup_detect_t s_pad_detect = {
+    .button = "Detect",
+    .title = "Find the controller",
+    .prompt = "Turn the host off (or switch its Bluetooth off), then press the PS button on the "
+              "controller. It must already be paired with this host.",
+    .timeout_s = 60,
+    .start = pad_detect_start,
+    .poll = pad_detect_poll,
+    .stop = pad_detect_stop,
+};
+
 static const bringup_field_t s_fields[] = {
     { .key = "bt_host", .label = "Host Bluetooth adapter", .group = "Bluetooth",
       .help = "The host's adapter address: bluetoothctl show", .type = BRINGUP_T_MAC,
       .required = true },
     { .key = "bt_pad", .label = "Controller address", .group = "Bluetooth",
-      .help = "The DualSense paired with the host: bluetoothctl devices Paired",
-      .type = BRINGUP_T_MAC, .required = true },
+      .help = "The DualSense paired with the host. Detect finds it when you press PS.",
+      .type = BRINGUP_T_MAC, .required = true, .detect = &s_pad_detect },
     { .key = "bt_lk", .label = "Controller link key", .group = "Bluetooth",
       .help = "Only for the accept-mode experiments. From /var/lib/bluetooth/<adapter>/<pad>/info",
       .type = BRINGUP_T_HEX, .max = 16, .secret = true },
     { .key = "wol_mac", .label = "Host wired MAC (Wake-on-LAN)", .group = "Wake",
       .help = "The host's Ethernet MAC, the one cabled to this board", .type = BRINGUP_T_MAC,
       .required = true },
+    { .key = "eth_save", .label = "Turn Ethernet off while the host is off", .group = "Power",
+      .help = "Saves the Ethernet chip's power. A press then takes about 3 s longer to wake the host",
+      .type = BRINGUP_T_BOOL, .def = "1" },
+    { .key = "eth_poll", .label = "Host check interval while off (s)", .group = "Power",
+      .help = "How often Ethernet comes up to see whether the host was started another way",
+      .type = BRINGUP_T_INT, .min = 10, .max = 600, .def = "30" },
+    { .key = "eth_grace", .label = "Keep Ethernet on after the host goes off (s)", .group = "Power",
+      .help = "Covers reboots", .type = BRINGUP_T_INT, .min = 0, .max = 3600, .def = "300" },
 };
 
 static void mac_to_str(const uint8_t m[6], char out[18])
@@ -303,21 +401,151 @@ static void on_got_ip6(void *arg, esp_event_base_t base, int32_t id, void *data)
     }
 }
 
+// ---- Ethernet power ----
+//
+// The LAN8720 and its 50 MHz oscillator are the board's largest steady load and are only needed
+// to see whether the host is up (ff02::1 ping) and to send the magic packet. While the host is off
+// they are powered down and brought up every eth_poll seconds for a short check; a wake request
+// brings them up at once. Known cost: if the host is started some other way, the board can think
+// it is off for up to eth_poll seconds and keeps answering the pad's page in that window (one
+// extra press at most, since the press itself brings Ethernet up and the check follows).
+
+typedef enum { ETHP_OFF, ETHP_PROBE, ETHP_ON } ethp_t;
+static const char *const s_ethp_names[] = { "off", "probe", "on" };
+static volatile ethp_t s_ethp = ETHP_ON;
+static SemaphoreHandle_t s_eth_mx;
+static int64_t s_host_seen_ms, s_eth_hold_until_ms, s_probe_end_ms, s_next_probe_ms;
+static bool s_eth_save;
+static int s_eth_poll_s, s_eth_grace_s;
+static TaskHandle_t s_wake_task;
+#if HAVE_LEDGER
+static pl_state_t *s_pl_eth;
+#endif
+
+#define PROBE_WINDOW_MS 10000 // link (2-3 s) + IPv6 DAD + a few 2 s pings
+#define WAKE_HOLD_MS    180000 // keep Ethernet on while a woken host boots
+
+static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
+
+// Order matters: the oscillator is the PHY's reference clock and the MAC's RMII clock. Down:
+// stop the driver (link down stops the MAC and frees its PM lock), power the PHY down over MDIO,
+// then stop the clock. Up: clock, PHY power, driver.
+static void eth_power(bool on)
+{
+    if (on) {
+        gpio_set_level(PIN_OSC_ENABLE, 1);
+        vTaskDelay(pdMS_TO_TICKS(10));
+        s_phy->pwrctl(s_phy, true);
+        esp_eth_start(s_eth);
+        if (s_ping) {
+            esp_ping_start(s_ping);
+        }
+    } else {
+        if (s_ping) {
+            esp_ping_stop(s_ping);
+        }
+        esp_eth_stop(s_eth);
+        s_link_up = false;
+        s_phy->pwrctl(s_phy, false);
+        gpio_set_level(PIN_OSC_ENABLE, 0);
+    }
+}
+
+static void ethp_set(ethp_t to, const char *why)
+{
+    ethp_t from = s_ethp;
+    if (from == to) {
+        return;
+    }
+    bool was_on = from != ETHP_OFF, want_on = to != ETHP_OFF;
+    if (was_on != want_on) {
+        eth_power(want_on);
+    }
+    s_ethp = to;
+#if HAVE_LEDGER
+    pl_state_set(s_pl_eth, (uint8_t)to);
+#endif
+    ESP_LOGI(TAG, "ethernet power %s -> %s (%s)", s_ethp_names[from], s_ethp_names[to], why);
+}
+
+// Magic packets go out from this task: a press may find Ethernet off, and the link then takes a
+// few seconds, which must not block the Bluetooth task.
+static void wake_task(void *arg)
+{
+    for (;;) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        xSemaphoreTake(s_eth_mx, portMAX_DELAY);
+        s_eth_hold_until_ms = now_ms() + WAKE_HOLD_MS;
+        ethp_set(ETHP_ON, "wake request");
+        xSemaphoreGive(s_eth_mx);
+        for (int i = 0; i < 80 && !s_link_up; i++) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        if (!s_link_up) {
+            ESP_LOGW(TAG, "wake: ethernet link did not come up in 8 s");
+            continue;
+        }
+        // Three packets: a NIC in standby that just renegotiated the link can miss the first.
+        for (int i = 0; i < 3; i++) {
+            wol_send(s_target);
+            vTaskDelay(pdMS_TO_TICKS(300));
+        }
+    }
+}
+
+static void wake_request(void)
+{
+    if (s_wake_task) {
+        xTaskNotifyGive(s_wake_task);
+    }
+}
+
 static void on_press(void)
 {
     if (!mac_is_set(s_target)) {
         ESP_LOGW(TAG, "press detected but no WoL target set");
         return;
     }
-    wol_send(s_target);
+    wake_request();
 }
 
 // Host is up while something other than us answered ff02::1 on the Ethernet link in the last 8 s.
 static void host_watch_task(void *arg)
 {
+    s_host_seen_ms = now_ms();
     for (;;) {
-        int64_t ok = s_host_ping_ok_ms;
-        bool up = ok >= 0 && esp_timer_get_time() / 1000 - ok < 8000;
+        int64_t now = now_ms(), ok = s_host_ping_ok_ms;
+        bool up = ok >= 0 && now - ok < 8000;
+        if (up) {
+            s_host_seen_ms = now;
+        }
+        xSemaphoreTake(s_eth_mx, portMAX_DELAY);
+        switch (s_ethp) {
+        case ETHP_ON:
+            if (s_eth_save && !up && now - s_host_seen_ms > (int64_t)s_eth_grace_s * 1000 &&
+                now > s_eth_hold_until_ms) {
+                ethp_set(ETHP_OFF, "host off");
+                s_next_probe_ms = now + (int64_t)s_eth_poll_s * 1000;
+            }
+            break;
+        case ETHP_OFF:
+            if (!s_eth_save) {
+                ethp_set(ETHP_ON, "power saving off");
+            } else if (now >= s_next_probe_ms) {
+                ethp_set(ETHP_PROBE, "host check");
+                s_probe_end_ms = now + PROBE_WINDOW_MS;
+            }
+            break;
+        case ETHP_PROBE:
+            if (up) {
+                ethp_set(ETHP_ON, "host is up");
+            } else if (now >= s_probe_end_ms) {
+                ethp_set(ETHP_OFF, "host still off");
+                s_next_probe_ms = now + (int64_t)s_eth_poll_s * 1000;
+            }
+            break;
+        }
+        xSemaphoreGive(s_eth_mx);
         if (s_bt_running) {
             bt_wake_set_host_up(up);
             bt_wake_tick();
@@ -380,6 +608,7 @@ static esp_err_t eth_start(void)
 
     esp_eth_mac_t *mac = esp_eth_mac_new_esp32(&emac_cfg, &mac_cfg);
     esp_eth_phy_t *phy = esp_eth_phy_new_lan87xx(&phy_cfg);
+    s_phy = phy;
     ESP_RETURN_ON_FALSE(mac && phy, ESP_FAIL, TAG, "mac/phy alloc failed");
 
     esp_eth_config_t cfg = ETH_DEFAULT_CONFIG(mac, phy);
@@ -409,10 +638,10 @@ static esp_err_t status_get(httpd_req_t *req)
     snprintf(body, sizeof(body),
              "{\"app\":\"esp32-wol-via-bt\",\"version\":\"%s\",\"partition\":\"%s\","
              "\"ip\":\"%s\",\"eth_link\":%s,\"wol_target\":\"%s\",\"uptime_s\":%lld,"
-             "\"setup\":\"%s\",\"bt\":%s}\n",
+             "\"setup\":\"%s\",\"eth_power\":\"%s\",\"bt\":%s}\n",
              ota_running_version(), ota_running_label(), s_ip, s_link_up ? "true" : "false",
              mac_is_set(s_target) ? m : "unset", (long long)(esp_timer_get_time() / 1000000),
-             bringup_active() ? bringup_reason() : "", bt);
+             bringup_active() ? bringup_reason() : "", s_ethp_names[s_ethp], bt);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, body);
 }
@@ -576,10 +805,15 @@ static esp_err_t wol_post(httpd_req_t *req)
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "no target: POST /wol?mac=... first");
         return ESP_OK;
     }
+    if (s_ethp != ETHP_ON || !s_link_up) {
+        wake_request(); // powers Ethernet up, waits for the link, then sends
+        return httpd_resp_sendstr(req, "ethernet was off: powering up, magic packet follows\n");
+    }
+    s_eth_hold_until_ms = now_ms() + WAKE_HOLD_MS;
     esp_err_t e = wol_send(s_target);
     if (e != ESP_OK) {
         httpd_resp_set_status(req, "503 Service Unavailable");
-        httpd_resp_sendstr(req, s_link_up ? "send failed\n" : "ethernet link down\n");
+        httpd_resp_sendstr(req, "send failed\n");
         return ESP_OK;
     }
     return httpd_resp_sendstr(req, "magic packet sent\n");
@@ -589,7 +823,10 @@ static void http_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 8192;
-    cfg.max_uri_handlers = 6 + BRINGUP_HTTP_HANDLERS + 2;
+    cfg.max_uri_handlers = 7 + BRINGUP_HTTP_HANDLERS + 2;
+    // Phones on the setup hotspot open many probe connections and leave them idle. Without
+    // purging, they fill the socket table and every new connection fails (accept error 23).
+    cfg.lru_purge_enable = true;
     httpd_handle_t server = NULL;
     ESP_ERROR_CHECK(httpd_start(&server, &cfg));
 
@@ -597,6 +834,9 @@ static void http_start(void)
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &status));
 
     ESP_ERROR_CHECK(bringup_register_http(server));
+#if HAVE_ESP_POWER
+    esp_power_register_http(server);
+#endif
     char admin[64];
     if (!bringup_get_str(BRINGUP_KEY_ADMIN_PASS, admin, sizeof(admin))) {
         ESP_LOGW(TAG, "no admin password yet: POST /ota, /wol and /bt disabled until /setup");
@@ -609,6 +849,55 @@ static void http_start(void)
     static const httpd_uri_t bt = { .uri = "/bt", .method = HTTP_POST, .handler = bt_post };
     ESP_ERROR_CHECK(httpd_register_uri_handler(server, &bt));
     ESP_LOGI(TAG, "POST /ota, /wol and /bt enabled; settings at /setup");
+}
+
+// The board is usually out of reach, so a wedged HTTP server would cut off OTA for good. Every
+// 60 s fetch our own status page over loopback; after 3 failures in a row, restart. Skipped while
+// an OTA upload holds the (single-threaded) server.
+static bool http_selfcheck_once(void)
+{
+    int s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (s < 0) {
+        return false; // socket table full counts as a failure
+    }
+    struct timeval tv = { .tv_sec = 10 };
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    struct sockaddr_in a = { .sin_family = AF_INET, .sin_port = htons(80),
+                             .sin_addr.s_addr = htonl(INADDR_LOOPBACK) };
+    bool ok = false;
+    static const char req[] = "GET / HTTP/1.0\r\n\r\n";
+    char buf[16] = "";
+    if (connect(s, (struct sockaddr *)&a, sizeof(a)) == 0 &&
+        send(s, req, sizeof(req) - 1, 0) == (int)sizeof(req) - 1 &&
+        recv(s, buf, sizeof(buf) - 1, 0) >= 12) {
+        ok = strncmp(buf, "HTTP/1.1 200", 12) == 0;
+    }
+    close(s);
+    return ok;
+}
+
+static void http_selfcheck_task(void *arg)
+{
+    int fails = 0;
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(60000));
+        if (ota_is_busy()) {
+            fails = 0;
+            continue;
+        }
+        if (http_selfcheck_once()) {
+            fails = 0;
+            continue;
+        }
+        fails++;
+        ESP_LOGW(TAG, "http self-check failed (%d of 3)", fails);
+        if (fails >= 3) {
+            ESP_LOGE(TAG, "http server unresponsive, restarting");
+            vTaskDelay(pdMS_TO_TICKS(500)); // let netserial ship the line
+            esp_restart();
+        }
+    }
 }
 
 // A freshly updated image is PENDING_VERIFY. It proves itself by getting an IP address
@@ -657,10 +946,30 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_got_ip, NULL));
     ESP_ERROR_CHECK(bringup_init(&s_setup)); // decides bring-up mode, starts Wi-Fi
     target_load();
+    // CPU scales 160 MHz down to the crystal when idle. Light sleep stays off: the Ethernet MAC
+    // (APB_FREQ_MAX while running) and the BR/EDR controller (NO_LIGHT_SLEEP, no 32 kHz crystal on
+    // this board) would block it anyway; /api/power lists what is holding what.
+#if HAVE_ESP_POWER
+    esp_power_init(&(esp_power_config_t){ .max_cpu_mhz = 160, .light_sleep = false });
+#endif
+#if HAVE_LEDGER
+    pl_init();
+    s_pl_eth = pl_state_register("eth", 3, s_ethp_names);
+    pl_state_set(s_pl_eth, ETHP_ON);
+#if HAVE_ESP_POWER
+    esp_power_add_section("ledger", pl_snapshot_json);
+#endif
+#endif
+    s_eth_save = bringup_get_bool("eth_save", true);
+    s_eth_poll_s = bringup_get_int("eth_poll", 30);
+    s_eth_grace_s = bringup_get_int("eth_grace", 300);
+    s_eth_mx = xSemaphoreCreateMutex();
+    xTaskCreate(wake_task, "wake", 3072, NULL, 5, &s_wake_task);
     ESP_ERROR_CHECK(eth_start());
     http_start();
     bt_start_from_nvs();
     xTaskCreate(host_watch_task, "host_watch", 3072, NULL, 4, NULL);
+    xTaskCreate(http_selfcheck_task, "http_check", 3072, NULL, 3, NULL);
     if (ota_pending_verify()) {
         xTaskCreate(selftest_task, "ota_selftest", 4096, NULL, 5, NULL);
     }

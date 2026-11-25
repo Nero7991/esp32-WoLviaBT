@@ -90,7 +90,7 @@ Settings live on the board and are edited at `http://<board>/setup`
 | Device name | optional |
 | Admin password | protects `/setup`, `/ota`, `/wol`, `/bt` (user `admin`), 8+ characters |
 | Host Bluetooth adapter | on the host: `bluetoothctl show` |
-| Controller address | on the host: `bluetoothctl devices Paired` (the DualSense) |
+| Controller address | press Detect, then the PS button (host off or its Bluetooth off); or `bluetoothctl devices Paired` on the host |
 | Controller link key | optional, accept-mode experiments only: `/var/lib/bluetooth/<adapter>/<pad>/info` |
 | Host wired MAC | the host's Ethernet MAC, the port cabled to this board |
 
@@ -101,7 +101,8 @@ to `http://192.168.4.1/setup`). Fill in the settings and press Save and restart.
 To move a configured board to another host (new Wi-Fi, new DualSense), get it back into setup
 mode in one of these ways:
 
-- power-cycle it 3 times in a row, each time unplugging within 10 s of plugging in;
+- power-cycle it 3 times in a row, each time unplugging within 10 s of plugging in, then plug it
+  in a fourth time and leave it;
 - from the current network: `curl -u admin:<pw> -X POST 'http://<board>/api/setup/action?do=bringup'`;
 - if it cannot join its saved network, the hotspot comes up by itself after 5 failed attempts.
 
@@ -112,6 +113,37 @@ On the host, enable Wake-on-LAN on the wired port permanently, e.g. with Network
 `nmcli con add type ethernet ifname <if> con-name wol-link ipv4.method link-local
 ipv6.method link-local 802-3-ethernet.wake-on-lan magic` (the board checks whether the host is up
 by pinging `ff02::1` on that link, so it only needs the link up, no IPv4).
+
+## Power
+
+The board's largest steady loads are the LAN8720 Ethernet chip and its 50 MHz oscillator. While
+the host is off (setting "Turn Ethernet off while the host is off", on by default), both are
+powered down. They come back up for a 10 s host check every `eth_poll` seconds (default 30), and
+at once on a PS press. Measured on the bench:
+- with 30 s settings, Ethernet was on about 25 % of the time while the host was off;
+- press to magic packet took about 3.3 s, including link negotiation.
+
+Ethernet stays on for `eth_grace` seconds (default 300) after the host goes off, which covers
+reboots, and for 3 minutes after a wake.
+
+The trade-off: if the host is started some other way, the board can think it is still off for up
+to `eth_poll` seconds. A press in that window is answered by the board, and the pad gives up. The
+press also brings Ethernet up, so the next press connects normally.
+
+Light sleep is not possible on this board. The Ethernet MAC driver holds an APB_FREQ_MAX lock
+from install to uninstall, and the BR/EDR controller forbids light sleep without a 32 kHz crystal.
+With the optional `esp-power` component the CPU scales between 80 and 160 MHz instead of a fixed
+160: about 93 % of the time at 80 MHz. `GET /api/power` shows the PM locks and the time per CPU
+mode.
+
+Optional, private components (the build works without them), used when present under
+`components/`, e.g. as symlinks:
+- `components/esp-power`: frequency scaling and `/api/power`
+- `components/esp-power-ledger`: power-state counters, including the Ethernet power state, in
+  `/api/power`
+
+The HTTP server purges the least recently used connection when full, and a self-check restarts
+the board if it stops answering for 3 minutes. Background: `docs/debugging/2026-11-25_httpd-socket-exhaustion.md`.
 
 ## Building and flashing
 

@@ -7,3 +7,6 @@ sdkconfig.local
 main/wifi_creds_local.h
 logs/
 __pycache__/
+build-ledger/
+components/esp-power
+components/esp-power-ledger

@@ -13,3 +13,11 @@ CONFIG_BT_ENABLED=y
 CONFIG_BT_CONTROLLER_ONLY=y
 CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=y
 CONFIG_BTDM_CTRL_HCI_MODE_VHCI=y
+
+# The setup hotspot sees many idle phone connections; 10 sockets ran out (accept error 23).
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# Dynamic frequency scaling (esp-power). Light sleep is blocked by EMAC and BR/EDR anyway.
+CONFIG_PM_ENABLE=y
+# Per-lock held time and time per CPU mode in /api/power.
+CONFIG_PM_PROFILING=y

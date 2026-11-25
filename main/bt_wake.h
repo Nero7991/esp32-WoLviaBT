@@ -76,3 +76,18 @@ void bt_wake_set_host_up(bool up);
 void bt_wake_tick(void);
 
 void bt_wake_status_json(char *buf, size_t len);
+
+// Learn mode, for finding a controller's address: page scan stays on and every Connection Request
+// is recorded and rejected (never a press). It turns itself off when bt_wake_learned() has not
+// been called for 20 s. A controller pages the host it is paired with, so this only sees pads
+// paired with the host whose address this board answers for.
+typedef struct {
+    uint8_t addr[6];
+    uint32_t cod;   // Class of Device from the request (DualSense: 0x002508, gamepad)
+    uint16_t count; // requests seen
+} bt_wake_seen_t;
+void bt_wake_learn(bool on);
+bool bt_wake_learning(void);
+int bt_wake_learned(bt_wake_seen_t *out, int max);
+// The address this board answers for (latched at bt_wake_start), false if not started.
+bool bt_wake_host(uint8_t out[6]);
