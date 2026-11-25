@@ -7,7 +7,8 @@ The BC-250 is an AMD mining card repurposed as a Steam gaming box. It cannot wak
 controller when it is powered off, because its Bluetooth and USB are unpowered or asleep. This
 board stays powered all the time, listens for the controller over Bluetooth, and wakes the box.
 
-Status: design notes only. No firmware has been written and nothing here has been tested.
+Status: an ESP-IDF scaffold builds (Ethernet bring-up and a Wake-on-LAN sender). It has not been
+flashed or run on hardware. Bluetooth detection is not written.
 
 ## What the board does
 
@@ -76,6 +77,38 @@ ATX 12 V ---------> BC-250 (auto power on)
 BC-250 USB 5 V ---divider---> ESP32 GPIO (alive monitoring, one candidate)
 BC-250 <--Ethernet--> ESP32 (shutdown requests, ping)
 ```
+
+## Building and flashing
+
+Toolchain: ESP-IDF v5.5.6 at `~/esp/v5.5.6/esp-idf` (shared with quickvolt). That install is
+registered for esp32c6 only, so `export.sh` does not put the Xtensa compiler on PATH; add it by
+hand. The global `PYTHONPATH` on this machine also has to be unset first.
+
+```
+unset PYTHONPATH
+. ~/esp/v5.5.6/esp-idf/export.sh
+export PATH="$HOME/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/bin:$PATH"
+idf.py menuconfig        # "WoL via BT": target MAC, optional send-on-boot test
+idf.py build
+idf.py -p /dev/ttyUSBx flash monitor
+```
+
+The WT32-ETH01 has no USB. Flash it through an external USB-serial adapter set to 3.3 V logic:
+
+| Adapter | WT32-ETH01 |
+|---|---|
+| TX | RXD (GPIO3) |
+| RX | TXD (GPIO1) |
+| GND | GND |
+| 5V | 5V (the 3V3 pin of a cheap adapter cannot feed the PHY) |
+| GND | IO0, only while flashing |
+
+There is no auto-reset circuit. Tie IO0 to GND, power-cycle or pulse EN to GND, flash, then
+remove the IO0 jumper and reset. GPIO0 is also the RMII clock input; the 50 MHz oscillator stays
+off until firmware drives GPIO16 high, which is why strapping IO0 low at boot is safe.
+
+Ethernet: LAN8720, PHY address 1, MDC GPIO23, MDIO GPIO18, oscillator enable GPIO16, clock in
+on GPIO0.
 
 ## Open questions
 
